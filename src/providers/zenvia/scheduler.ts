@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { registerJobHandler, scheduleJob } from "../../shared/scheduler/scheduler.js";
-import { deliverWebhook } from "../../shared/webhooks/deliver.js";
+import { deliverWebhook, logDroppedWebhook } from "../../shared/webhooks/deliver.js";
+import { consumeMatchingFault } from "../../shared/admin/faults.js";
 import { findActiveSubscriptionsForChannel, getMessage, updateMessageStatus } from "./state.js";
 
 const STATUS_DELAY_MS = Number(process.env.ZENVIA_STATUS_DELAY_MS ?? 2000);
@@ -33,32 +34,50 @@ async function handleAdvance(payload: unknown): Promise<void> {
     if (subscription.criteriaDirection && subscription.criteriaDirection !== "ALL" && subscription.criteriaDirection !== message.direction) {
       continue;
     }
+    const eventPayload: Record<string, unknown> = {
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+      subscriptionId: subscription.id,
+      type: "MESSAGE_STATUS",
+      channel: message.channel,
+      message: {
+        id: message.id,
+        externalId: message.externalId ?? undefined,
+        direction: message.direction,
+        from: message.from,
+        to: message.to,
+      },
+      messageStatus: {
+        code: nextStatus,
+        timestamp: new Date().toISOString(),
+        channel: message.channel,
+        direction: message.direction,
+      },
+    };
+
+    const webhookFault = consumeMatchingFault("zenvia", "webhook");
+    if (webhookFault?.faultKind === "webhook_dropped") {
+      logDroppedWebhook({
+        provider: "zenvia",
+        resourceType: "message",
+        resourceId: message.id,
+        url: subscription.webhookUrl,
+        payload: eventPayload,
+      });
+      continue;
+    }
+    if (webhookFault?.faultKind === "webhook_invalid") {
+      delete eventPayload.messageStatus;
+      eventPayload.malformed = true;
+    }
+
     await deliverWebhook({
       provider: "zenvia",
       resourceType: "message",
       resourceId: message.id,
       url: subscription.webhookUrl,
       headers: subscription.webhookHeaders ?? undefined,
-      payload: {
-        id: randomUUID(),
-        timestamp: new Date().toISOString(),
-        subscriptionId: subscription.id,
-        type: "MESSAGE_STATUS",
-        channel: message.channel,
-        message: {
-          id: message.id,
-          externalId: message.externalId ?? undefined,
-          direction: message.direction,
-          from: message.from,
-          to: message.to,
-        },
-        messageStatus: {
-          code: nextStatus,
-          timestamp: new Date().toISOString(),
-          channel: message.channel,
-          direction: message.direction,
-        },
-      },
+      payload: eventPayload,
     });
   }
 

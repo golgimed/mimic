@@ -10,6 +10,15 @@ interface DeliverWebhookInput {
   timeoutMs?: number;
 }
 
+export function logDroppedWebhook(input: Omit<DeliverWebhookInput, "timeoutMs" | "headers">): void {
+  getDb()
+    .prepare(
+      `INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code)
+       VALUES (?, ?, ?, ?, ?, 'dropped', NULL)`,
+    )
+    .run(input.provider, input.resourceType, input.resourceId, input.url, JSON.stringify(input.payload));
+}
+
 export async function deliverWebhook(input: DeliverWebhookInput): Promise<void> {
   const { provider, resourceType, resourceId, url, payload, headers, timeoutMs = 5000 } = input;
   const db = getDb();

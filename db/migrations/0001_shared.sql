@@ -24,7 +24,7 @@ CREATE TABLE webhook_deliveries (
 CREATE INDEX idx_webhook_deliveries_resource ON webhook_deliveries (provider, resource_type, resource_id);
 
 CREATE TABLE fault_config (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
   route_pattern TEXT,
   fault_kind TEXT NOT NULL,

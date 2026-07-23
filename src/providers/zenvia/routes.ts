@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireApiToken } from "../../shared/auth/apiToken.js";
+import { requestFaultHook } from "../../shared/admin/applyFaults.js";
 import {
   createSmsMessageHandler,
   createSubscriptionHandler,
@@ -13,6 +14,7 @@ export async function zenviaRoutes(app: FastifyInstance) {
   registerZenviaScheduler();
 
   app.addHook("onRequest", await requireApiToken("X-API-TOKEN"));
+  app.addHook("preHandler", requestFaultHook("zenvia"));
 
   app.post("/channels/sms/messages", createSmsMessageHandler);
 

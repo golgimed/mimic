@@ -1,0 +1,18 @@
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DB_PATH: /data/simulator.sqlite
+      MIGRATIONS_DIR: /app/db/migrations
+      LOG_LEVEL: info
+      DEFAULT_DELAY_MS: "2000"
+    volumes:
+      - simulator-data:/data
+
+volumes:
+  simulator-data:

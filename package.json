@@ -4,6 +4,7 @@
   "description": "Provider Simulator - emulates third-party providers (IntegraICP, Zenvia) for local dev, CI and integration tests",
   "type": "module",
   "private": true,
+  "license": "Apache-2.0",
   "engines": {
     "node": ">=22"
   },

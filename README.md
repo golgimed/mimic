@@ -1,92 +1,135 @@
-# Provider Simulator
+# GolgiMed Provider Simulator
 
-Emulates third-party providers (IntegraICP, Zenvia) for GolgiMed local development, integration tests, and CI. See [CLAUDE.md](CLAUDE.md) for the project's design philosophy and constraints.
+A lightweight simulator for third-party providers used by GolgiMed — for local development, integration testing, and CI, when you don't have (or don't want to depend on) real sandbox access.
 
-## Running locally
+It emulates provider HTTP contracts, state transitions, and webhooks with predictable, configurable behavior. It is **not** a production system, and it does not try to reproduce every detail of the real providers — see [CLAUDE.md](CLAUDE.md) for the project's design philosophy.
+
+Currently simulated:
+
+- **[Zenvia](https://zenvia.github.io/zenvia-openapi-spec/v2/)** — SMS, WhatsApp, and Email messaging, with subscription-based delivery-status webhooks.
+- **[IntegraICP](https://developers.integraicp.com.br/api-reference/icp/v3/index.html)** — Brazilian digital signature / ICP-Brasil certificate flows.
+
+## Requirements
+
+- Node.js 22+
+- Docker + Docker Compose (optional, for containerized runs)
+
+## Getting started
 
 ```bash
 npm install
-npm run dev          # tsx watch, http://localhost:3000
+npm run dev
 ```
 
-Or via Docker:
+The server listens on `http://localhost:3000` (`PORT` env var to change it). State is a local SQLite file at `db/simulator.sqlite`; delete it to reset.
+
+Or with Docker:
 
 ```bash
 docker compose up --build
 ```
 
-SQLite state persists in `db/simulator.sqlite` (local) or the `simulator-data` volume (Docker). Delete it (or `docker compose down -v`) to reset.
+## Usage
 
-## Testing
+Every endpoint mirrors its real provider's relative path and payload shape as closely as reasonably possible, so a client built against the real API works against the simulator with only its base URL changed.
+
+### SMS
 
 ```bash
-npm run typecheck
-npm test              # vitest, in-process Fastify + :memory: SQLite
+curl http://localhost:3000/zenvia/channels/sms/messages \
+  -H "X-API-TOKEN: any-value" -H "Content-Type: application/json" \
+  -d '{"from":"sender-id","to":"5511999999999","contents":[{"type":"text","text":"Hello"}]}'
+```
+
+### WhatsApp
+
+```bash
+curl http://localhost:3000/zenvia/channels/whatsapp/messages \
+  -H "X-API-TOKEN: any-value" -H "Content-Type: application/json" \
+  -d '{"from":"sender-id","to":"5511999999999","contents":[{"type":"text","text":"Hello"}]}'
+```
+
+Content types: `text`, `template`, `file`. See the [Zenvia API reference](https://zenvia.github.io/zenvia-openapi-spec/v2/) for full payload options — buttons/lists/products/flows/location/contacts content types aren't implemented here.
+
+### Email
+
+```bash
+curl http://localhost:3000/zenvia/channels/email/messages \
+  -H "X-API-TOKEN: any-value" -H "Content-Type: application/json" \
+  -d '{"from":"sender@example.com","to":"recipient@example.com","contents":[{"type":"email","subject":"Hi","html":"<b>Hello</b>"}]}'
+```
+
+### Delivery-status webhooks (SMS/WhatsApp/Email)
+
+Zenvia delivers status updates via a **subscription** you create once, not a per-message callback. Subscribe a webhook URL to a channel, then watch it receive `MESSAGE_STATUS` events as each message advances internally (`ACCEPTED → SENT → DELIVERED`):
+
+```bash
+curl http://localhost:3000/zenvia/subscriptions \
+  -H "X-API-TOKEN: any-value" -H "Content-Type: application/json" \
+  -d '{"eventType":"MESSAGE_STATUS","webhook":{"url":"https://your-app/webhooks/zenvia"},"criteria":{"channel":"sms"}}'
+```
+
+### Digital signature (IntegraICP)
+
+Three-step flow — see the [IntegraICP API reference](https://developers.integraicp.com.br/api-reference/icp/v3/index.html) for the full picture (PKCE, clearances, certificates):
+
+```bash
+# 1. Authenticate (autostart=true skips the real human-in-the-loop provider login
+#    and immediately redirects to callback_uri with a credentialId)
+curl -i "http://localhost:3000/integraicp/c/my-channel/icp/v3/authentications?secret_data=<code_challenge>&callback_uri=https://your-app/callback&autostart=true"
+
+# 2. Fetch the credential (secret_data here is the code_verifier for the challenge above)
+curl "http://localhost:3000/integraicp/c/my-channel/icp/v3/credentials/<credentialId>?secret_data=<code_verifier>"
+
+# 3. Sign content (contentDigest is base64(sha256(content)))
+curl http://localhost:3000/integraicp/c/my-channel/icp/v3/signatures \
+  -H "Content-Type: application/json" \
+  -d '{"credentialId":"<credentialId>","secretData":"<code_verifier>","requests":[{"contentDigest":"<base64-sha256>"}]}'
 ```
 
 ## Dashboard
 
-`GET /dashboard` — a single static page listing everything the simulator has "sent" (Zenvia messages, IntegraICP credentials), newest first. Click a row for its raw payload and webhook delivery log. Polls `GET /admin/items` / `GET /admin/items/:provider/:id`.
-
-## Providers
-
-### Zenvia (`/zenvia/...`)
-
-Routes mirror the real relative paths. Contract cached at [`docs/vendor/zenvia-openapi-v2.json`](docs/vendor/zenvia-openapi-v2.json).
-
-- `POST /zenvia/channels/sms/messages` — content: `text` | `template`.
-- `POST /zenvia/channels/whatsapp/messages` — content: `text` | `template` | `file`. Also accepts `idRef`/`contentRef` (reply-to). The real API additionally supports buttons/lists/products/flows/location/contacts content types — out of scope for now, add if GolgiMed needs them.
-- `POST /zenvia/channels/email/messages` — content: `email` (`subject`, `html`, `attachments`) | `template`. Also accepts `representative` (`{type, name}`).
-- All three require `X-API-TOKEN` and return the message as sent; no status field (matches the real API).
-- `POST /zenvia/subscriptions`, `GET /zenvia/subscriptions`, `GET|DELETE /zenvia/subscriptions/:id` — subscribe a webhook URL to `MESSAGE_STATUS` events for a channel.
-- Internally, message status advances `ACCEPTED → SENT → DELIVERED` on a timer (`ZENVIA_STATUS_DELAY_MS`, default 2000ms), the same two-hop transition for every channel — a simplification; the real API's exact status codes differ slightly per channel (e.g. WhatsApp also has `READ`). Each hop posts a `MESSAGE_STATUS` event to matching subscriptions.
-
-### IntegraICP (`/integraicp/c/:channelId/icp/v3/...`)
-
-Digital signature flow. Contract cached at [`docs/vendor/integraicp-api-reference-v3.md`](docs/vendor/integraicp-api-reference-v3.md) (a Docsify page — IntegraICP has no OpenAPI spec).
-
-- `GET /authentications` — with `autostart=true`, the simulator **auto-authenticates synchronously** and 302-redirects to `callback_uri` with a fake `credentialId` (the real flow needs a human picking a provider and logging in, which can't be reproduced). Without `autostart`, returns a fake `ClearancesResult` list.
-- `GET /credentials/:credentialId` — poll for the (simulated) authenticated credential + fake certificate info.
-- `POST /signatures` — synchronous, matching the real API: signs and returns `COMPLETED_WITH_SUCCESS` in the same response.
-- PKCE (RFC 7636) is validated end to end: `secret_data` at `/authentications` is a `code_challenge`, `secret_data` at `/credentials` and `/signatures` must be the matching `code_verifier`.
+`GET /dashboard` — a single page listing everything the simulator has processed (messages, credentials), newest first. Click a row for its raw payload and webhook delivery log.
 
 ## Fault injection
 
-`PUT /admin/faults` `{ provider, routePattern?, faultKind, faultValue?, times? }` — `routePattern` omitted applies to every route for that provider; `times` omitted means the fault stays active until deleted.
+Simulate failures without touching code:
 
-Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload` (checked before the real handler runs), `webhook_dropped`, `webhook_invalid` (checked at Zenvia webhook delivery time — use `routePattern: "webhook"`).
+```bash
+curl -X PUT http://localhost:3000/admin/faults -H "Content-Type: application/json" \
+  -d '{"provider":"zenvia","routePattern":"/zenvia/channels/sms/messages","faultKind":"http_status","faultValue":"503"}'
+```
 
-`GET /admin/faults` lists active faults, `DELETE /admin/faults/:id` clears one.
+Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload`, `webhook_dropped`, `webhook_invalid`. Omit `routePattern` to apply to every route for a provider; add `"times": N` to auto-clear after N uses. `GET /admin/faults` lists active faults, `DELETE /admin/faults/:id` clears one.
 
-## Environment variables
+## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | HTTP port |
 | `DB_PATH` | `db/simulator.sqlite` | SQLite file path |
-| `MIGRATIONS_DIR` | `db/migrations` | Migration files |
 | `LOG_LEVEL` | `info` | Fastify logger level |
 | `DEFAULT_DELAY_MS` | `0` | Baseline simulated processing latency |
-| `ZENVIA_STATUS_DELAY_MS` | `2000` | Delay per Zenvia status hop |
-| `SCHEDULER_INTERVAL_MS` | `1000` | Job poll interval |
-| `DASHBOARD_PATH` | `dashboard/index.html` | Dashboard HTML file |
+| `ZENVIA_STATUS_DELAY_MS` | `2000` | Delay per Zenvia status transition |
+| `SCHEDULER_INTERVAL_MS` | `1000` | Background job poll interval |
 
-## Assumptions and known gaps
+## Testing
 
-Neither provider's real sandbox was available while building this — contracts were taken from public docs (cached under `docs/vendor/`) rather than verified traffic. Notable gaps, to revisit once sandbox access exists:
+```bash
+npm run typecheck
+npm test
+```
 
-- IntegraICP's real auth requires a human choosing a Clearance and logging into an actual trust provider; the simulator skips straight to issuing a credential. The non-autostart "list clearances" path always returns one fake entry.
-- Zenvia webhook signing/verification (e.g. an HMAC header) isn't confirmed from the spec.
-- Rate-limit (429) behavior and exact error-body shapes for edge cases are best-effort.
-- GolgiMed doesn't currently integrate with Zenvia for any channel: WhatsApp is sent via Meta's Cloud API directly, and SMS/Email delivery are unimplemented stubs (Zenvia is only listed as one *candidate* SMS provider in PP-011). The Zenvia WhatsApp/Email channels here were built ahead of real usage, straight from the public spec.
+Integration tests spin up the Fastify app in-process against an in-memory SQLite database (Vitest, `tests/`).
 
-### Wiring GolgiMed to this simulator (not yet done — GolgiMed-side work)
+## Known limitations
 
-None of the four channels can be pointed at this simulator via env config alone today; each needs a code change in the `openmed` repo:
+Contracts are taken from each provider's public documentation (cached under [`docs/vendor/`](docs/vendor/)), not verified sandbox traffic, since sandbox access wasn't available while building this:
 
-- **SMS** (`services/openmed/internal/delivery/adapters/sms/sms_deliverer.go`) — `HTTPSMSClient.Send()` is a pure stub, no HTTP client. `BaseURL`/`APIKey` fields already exist (from `SMS_BASE_URL`/`SMS_API_KEY`) but are never read. Needs the actual `POST {BaseURL}/channels/sms/messages` call added, with `X-API-TOKEN: {APIKey}`.
-- **Email** (`.../adapters/email/email_deliverer.go`) — closest to done: has an `http.Client` and `BaseURL`/`APIKey` wired via `EMAIL_BASE_URL`/`EMAIL_API_KEY`, but `Send()` still returns a fake ID without calling out. Same fix shape as SMS, targeting `/channels/email/messages`.
-- **WhatsApp** (`.../adapters/whatsapp/whatsapp_deliverer.go`) — hardcoded to `graph.facebook.com` with **Meta's payload shape** (`messaging_product`, `type: "template"`), not Zenvia's. Pointing it at this simulator's `/zenvia/channels/whatsapp/messages` wouldn't work even with a base-URL override — the request bodies don't match. Simulating WhatsApp against GolgiMed's real code would need either a Meta-shaped fake (not built — declined for now) or rewriting the deliverer to speak Zenvia (a bigger, deliberate change, since Meta was an ADR-050 decision).
-- **Signature** — GolgiMed's `internal/signature` module has a `SignatureProvider` interface and adapters for BirdID/SafeID/GovBR/ClickSign/ICP-Brasil, each with a `BaseURL` env var — but **no IntegraICP adapter exists**. Needs a new `internal/signature/adapters/integraicp/` package implementing `SignatureProvider`, following the BirdID/SafeID adapter as a template, registered in `signature/module.go`.
+- IntegraICP's real auth requires a human choosing a provider and logging in; the simulator auto-authenticates instead. The non-autostart "list clearances" response always returns one fake entry.
+- Zenvia's internal status transition (`ACCEPTED → SENT → DELIVERED`) is the same for every channel; the real API's exact codes vary slightly by channel (e.g. WhatsApp also has `READ`).
+- Webhook signing/verification (e.g. an HMAC header), rate-limit (429) behavior, and exact error-body shapes for edge cases are best-effort.
 
-This repo's endpoints are ready to be called once that wiring exists; the work above is tracked as a to-do, not started.
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).

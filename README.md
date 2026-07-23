@@ -78,4 +78,15 @@ Neither provider's real sandbox was available while building this — contracts 
 - IntegraICP's real auth requires a human choosing a Clearance and logging into an actual trust provider; the simulator skips straight to issuing a credential. The non-autostart "list clearances" path always returns one fake entry.
 - Zenvia webhook signing/verification (e.g. an HMAC header) isn't confirmed from the spec.
 - Rate-limit (429) behavior and exact error-body shapes for edge cases are best-effort.
-- GolgiMed doesn't currently integrate with Zenvia for any channel: WhatsApp is sent via Meta's Cloud API directly, and SMS/Email delivery are unimplemented stubs (Zenvia is only listed as one *candidate* SMS provider in PP-011). The Zenvia WhatsApp/Email channels here were built ahead of real usage, straight from the public spec. A Meta Cloud API fake (matching what GolgiMed's WhatsApp deliverer actually calls) is a reasonable future addition if WhatsApp simulation is needed — not yet built.
+- GolgiMed doesn't currently integrate with Zenvia for any channel: WhatsApp is sent via Meta's Cloud API directly, and SMS/Email delivery are unimplemented stubs (Zenvia is only listed as one *candidate* SMS provider in PP-011). The Zenvia WhatsApp/Email channels here were built ahead of real usage, straight from the public spec.
+
+### Wiring GolgiMed to this simulator (not yet done — GolgiMed-side work)
+
+None of the four channels can be pointed at this simulator via env config alone today; each needs a code change in the `openmed` repo:
+
+- **SMS** (`services/openmed/internal/delivery/adapters/sms/sms_deliverer.go`) — `HTTPSMSClient.Send()` is a pure stub, no HTTP client. `BaseURL`/`APIKey` fields already exist (from `SMS_BASE_URL`/`SMS_API_KEY`) but are never read. Needs the actual `POST {BaseURL}/channels/sms/messages` call added, with `X-API-TOKEN: {APIKey}`.
+- **Email** (`.../adapters/email/email_deliverer.go`) — closest to done: has an `http.Client` and `BaseURL`/`APIKey` wired via `EMAIL_BASE_URL`/`EMAIL_API_KEY`, but `Send()` still returns a fake ID without calling out. Same fix shape as SMS, targeting `/channels/email/messages`.
+- **WhatsApp** (`.../adapters/whatsapp/whatsapp_deliverer.go`) — hardcoded to `graph.facebook.com` with **Meta's payload shape** (`messaging_product`, `type: "template"`), not Zenvia's. Pointing it at this simulator's `/zenvia/channels/whatsapp/messages` wouldn't work even with a base-URL override — the request bodies don't match. Simulating WhatsApp against GolgiMed's real code would need either a Meta-shaped fake (not built — declined for now) or rewriting the deliverer to speak Zenvia (a bigger, deliberate change, since Meta was an ADR-050 decision).
+- **Signature** — GolgiMed's `internal/signature` module has a `SignatureProvider` interface and adapters for BirdID/SafeID/GovBR/ClickSign/ICP-Brasil, each with a `BaseURL` env var — but **no IntegraICP adapter exists**. Needs a new `internal/signature/adapters/integraicp/` package implementing `SignatureProvider`, following the BirdID/SafeID adapter as a template, registered in `signature/module.go`.
+
+This repo's endpoints are ready to be called once that wiring exists; the work above is tracked as a to-do, not started.

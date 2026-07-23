@@ -1,0 +1,78 @@
+# Provider Simulator
+
+Emulates third-party providers (IntegraICP, Zenvia) for GolgiMed local development, integration tests, and CI. See [CLAUDE.md](CLAUDE.md) for the project's design philosophy and constraints.
+
+## Running locally
+
+```bash
+npm install
+npm run dev          # tsx watch, http://localhost:3000
+```
+
+Or via Docker:
+
+```bash
+docker compose up --build
+```
+
+SQLite state persists in `db/simulator.sqlite` (local) or the `simulator-data` volume (Docker). Delete it (or `docker compose down -v`) to reset.
+
+## Testing
+
+```bash
+npm run typecheck
+npm test              # vitest, in-process Fastify + :memory: SQLite
+```
+
+## Dashboard
+
+`GET /dashboard` — a single static page listing everything the simulator has "sent" (Zenvia messages, IntegraICP credentials), newest first. Click a row for its raw payload and webhook delivery log. Polls `GET /admin/items` / `GET /admin/items/:provider/:id`.
+
+## Providers
+
+### Zenvia (`/zenvia/...`)
+
+Routes mirror the real relative paths. Contract cached at [`docs/vendor/zenvia-openapi-v2.json`](docs/vendor/zenvia-openapi-v2.json).
+
+- `POST /zenvia/channels/sms/messages` — send an SMS (`X-API-TOKEN` header required). Returns the message as sent; no status field (matches the real API).
+- `POST /zenvia/subscriptions`, `GET /zenvia/subscriptions`, `GET|DELETE /zenvia/subscriptions/:id` — subscribe a webhook URL to `MESSAGE_STATUS` events for a channel.
+- Internally, message status advances `ACCEPTED → SENT → DELIVERED` on a timer (`ZENVIA_STATUS_DELAY_MS`, default 2000ms). Each hop posts a `MESSAGE_STATUS` event to matching subscriptions.
+- Only the SMS channel is implemented. WhatsApp/Email follow the same pattern when needed.
+
+### IntegraICP (`/integraicp/c/:channelId/icp/v3/...`)
+
+Digital signature flow. Contract cached at [`docs/vendor/integraicp-api-reference-v3.md`](docs/vendor/integraicp-api-reference-v3.md) (a Docsify page — IntegraICP has no OpenAPI spec).
+
+- `GET /authentications` — with `autostart=true`, the simulator **auto-authenticates synchronously** and 302-redirects to `callback_uri` with a fake `credentialId` (the real flow needs a human picking a provider and logging in, which can't be reproduced). Without `autostart`, returns a fake `ClearancesResult` list.
+- `GET /credentials/:credentialId` — poll for the (simulated) authenticated credential + fake certificate info.
+- `POST /signatures` — synchronous, matching the real API: signs and returns `COMPLETED_WITH_SUCCESS` in the same response.
+- PKCE (RFC 7636) is validated end to end: `secret_data` at `/authentications` is a `code_challenge`, `secret_data` at `/credentials` and `/signatures` must be the matching `code_verifier`.
+
+## Fault injection
+
+`PUT /admin/faults` `{ provider, routePattern?, faultKind, faultValue?, times? }` — `routePattern` omitted applies to every route for that provider; `times` omitted means the fault stays active until deleted.
+
+Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload` (checked before the real handler runs), `webhook_dropped`, `webhook_invalid` (checked at Zenvia webhook delivery time — use `routePattern: "webhook"`).
+
+`GET /admin/faults` lists active faults, `DELETE /admin/faults/:id` clears one.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `3000` | HTTP port |
+| `DB_PATH` | `db/simulator.sqlite` | SQLite file path |
+| `MIGRATIONS_DIR` | `db/migrations` | Migration files |
+| `LOG_LEVEL` | `info` | Fastify logger level |
+| `DEFAULT_DELAY_MS` | `0` | Baseline simulated processing latency |
+| `ZENVIA_STATUS_DELAY_MS` | `2000` | Delay per Zenvia status hop |
+| `SCHEDULER_INTERVAL_MS` | `1000` | Job poll interval |
+| `DASHBOARD_PATH` | `dashboard/index.html` | Dashboard HTML file |
+
+## Assumptions and known gaps
+
+Neither provider's real sandbox was available while building this — contracts were taken from public docs (cached under `docs/vendor/`) rather than verified traffic. Notable gaps, to revisit once sandbox access exists:
+
+- IntegraICP's real auth requires a human choosing a Clearance and logging into an actual trust provider; the simulator skips straight to issuing a credential. The non-autostart "list clearances" path always returns one fake entry.
+- Zenvia webhook signing/verification (e.g. an HMAC header) isn't confirmed from the spec.
+- Rate-limit (429) behavior and exact error-body shapes for edge cases are best-effort.

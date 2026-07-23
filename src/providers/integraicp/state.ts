@@ -63,6 +63,11 @@ export function createCredential(input: {
   return toCredential(row);
 }
 
+export function listCredentials(): IntegraIcpCredential[] {
+  const rows = getDb().prepare("SELECT * FROM integraicp_credentials ORDER BY created_at DESC").all() as CredentialRow[];
+  return rows.map(toCredential);
+}
+
 export function getCredential(id: string): IntegraIcpCredential | undefined {
   const row = getDb().prepare("SELECT * FROM integraicp_credentials WHERE id = ?").get(id) as
     | CredentialRow

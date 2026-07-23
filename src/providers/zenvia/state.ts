@@ -52,6 +52,11 @@ export function createMessage(channel: string, input: CreateSmsMessageInput): Ze
   return toMessage(row);
 }
 
+export function listMessages(): ZenviaMessage[] {
+  const rows = getDb().prepare("SELECT * FROM zenvia_messages ORDER BY created_at DESC").all() as MessageRow[];
+  return rows.map(toMessage);
+}
+
 export function getMessage(id: string): ZenviaMessage | undefined {
   const row = getDb().prepare("SELECT * FROM zenvia_messages WHERE id = ?").get(id) as MessageRow | undefined;
   return row ? toMessage(row) : undefined;

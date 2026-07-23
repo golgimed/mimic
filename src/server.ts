@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import Fastify from "fastify";
 import { getDb } from "./shared/storage/db.js";
 import { runMigrations } from "./shared/storage/migrate.js";
@@ -7,6 +8,7 @@ import { integraIcpRoutes } from "./providers/integraicp/routes.js";
 import { adminRoutes } from "./shared/admin/routes.js";
 
 const SCHEDULER_INTERVAL_MS = Number(process.env.SCHEDULER_INTERVAL_MS ?? 1000);
+const DASHBOARD_PATH = process.env.DASHBOARD_PATH ?? "dashboard/index.html";
 
 export async function buildServer() {
   const app = Fastify({
@@ -16,6 +18,10 @@ export async function buildServer() {
   runMigrations(getDb());
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.get("/dashboard", async (_req, reply) => {
+    reply.type("text/html").send(readFileSync(DASHBOARD_PATH, "utf-8"));
+  });
 
   await app.register(zenviaRoutes, { prefix: "/zenvia" });
   await app.register(integraIcpRoutes, { prefix: "/integraicp" });

@@ -1,8 +1,22 @@
 import type { FastifyInstance } from "fastify";
 import { createFaultSchema } from "./schemas.js";
 import { createFault, deleteFault, listFaults } from "./faults.js";
+import { getItemDetail, listItems } from "./items.js";
 
 export async function adminRoutes(app: FastifyInstance) {
+  app.get("/items", async (_req, reply) => {
+    return reply.code(200).send({ content: listItems() });
+  });
+
+  app.get("/items/:provider/:id", async (req, reply) => {
+    const { provider, id } = req.params as { provider: string; id: string };
+    const detail = getItemDetail(provider, id);
+    if (!detail) {
+      return reply.code(404).send({ error: { code: "NOT_FOUND", message: "Item not found" } });
+    }
+    return reply.code(200).send(detail);
+  });
+
   app.put("/faults", async (req, reply) => {
     const parsed = createFaultSchema.safeParse(req.body);
     if (!parsed.success) {

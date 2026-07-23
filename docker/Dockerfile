@@ -13,6 +13,7 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 COPY --from=build /app/dist ./dist
 COPY db/migrations ./db/migrations
+COPY dashboard ./dashboard
 
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

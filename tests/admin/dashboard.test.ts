@@ -57,6 +57,6 @@ describe("Dashboard admin endpoints", () => {
     const res = await app.inject({ method: "GET", url: "/dashboard" });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toContain("text/html");
-    expect(res.payload).toContain("Provider Simulator");
+    expect(res.payload).toContain("Mimic");
   });
 });

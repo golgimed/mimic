@@ -1,6 +1,12 @@
-# GolgiMed Provider Simulator
+<p align="center">
+  <img src=".github/mimic-logo.png" alt="Mimic" width="200" />
+</p>
+
+# Mimic
 
 A lightweight simulator for third-party providers used by GolgiMed — for local development, integration testing, and CI, when you don't have (or don't want to depend on) real sandbox access.
+
+Looks like the real provider. Bites different.
 
 It emulates provider HTTP contracts, state transitions, and webhooks with predictable, configurable behavior. It is **not** a production system, and it does not try to reproduce every detail of the real providers — see [CLAUDE.md](CLAUDE.md) for the project's design philosophy.
 

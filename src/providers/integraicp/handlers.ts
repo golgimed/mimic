@@ -43,7 +43,7 @@ export async function authenticationsHandler(
   return reply.code(200).send({
     data: {
       requestId: randomUUID(),
-      channelName: "Provider Simulator",
+      channelName: "Mimic",
       channelDescription: "IntegraICP - Simulated Broker",
       expireTimestamp: new Date(Date.now() + (query.clearance_lifetime ?? 86400) * 1000).toISOString(),
       executionStatus: {

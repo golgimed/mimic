@@ -1,7 +1,7 @@
 {
-  "name": "golgimed-fakeproviders",
+  "name": "mimic",
   "version": "0.1.0",
-  "description": "Provider Simulator - emulates third-party providers (IntegraICP, Zenvia) for local dev, CI and integration tests",
+  "description": "Mimic - emulates third-party providers (IntegraICP, Zenvia) for local dev, CI and integration tests. Looks like the real chest, bites different.",
   "type": "module",
   "private": true,
   "license": "Apache-2.0",
@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.0",
     "better-sqlite3": "^11.9.1",
     "fastify": "^5.2.1",
     "zod": "^3.24.1"

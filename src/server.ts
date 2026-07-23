@@ -1,5 +1,10 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import Fastify from "fastify";
+import cors from "@fastify/cors";
+
+if (existsSync(".env")) {
+  process.loadEnvFile(".env");
+}
 import { getDb } from "./shared/storage/db.js";
 import { runMigrations } from "./shared/storage/migrate.js";
 import { startScheduler } from "./shared/scheduler/scheduler.js";
@@ -17,6 +22,8 @@ export async function buildServer() {
 
   runMigrations(getDb());
 
+  await app.register(cors, { origin: true });
+
   app.get("/health", async () => ({ status: "ok" }));
 
   app.get("/dashboard", async (_req, reply) => {
@@ -33,10 +40,20 @@ export async function buildServer() {
   return app;
 }
 
+function printBanner(port: number) {
+  const color = process.stdout.isTTY;
+  const purple = (s: string) => (color ? `\x1b[35m${s}\x1b[0m` : s);
+  const dim = (s: string) => (color ? `\x1b[2m${s}\x1b[0m` : s);
+
+  console.log(`${purple("MIMIC")}  ${dim("looks like the provider, bites different")}`);
+  console.log(dim(`listening on http://localhost:${port}`));
+}
+
 async function main() {
   const app = await buildServer();
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: "0.0.0.0" });
+  printBanner(port);
 }
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {

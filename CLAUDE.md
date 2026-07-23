@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-# Provider Simulator
+# Mimic
 
-Provider Simulator is an engineering tool used to simulate third-party providers during local development, integration testing and CI.
+Mimic is an engineering tool used to simulate third-party providers during local development, integration testing and CI. Like the D&D monster, it looks like the real thing (the provider's API contract) but does something else underneath (deterministic, controllable fake behavior).
 
 The goal is to emulate external services with predictable behavior while keeping the implementation as simple as possible.
 

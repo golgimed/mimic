@@ -123,4 +123,70 @@ describe("Zenvia MESSAGE_STATUS webhook flow", () => {
     });
     expect(getRes.statusCode).toBe(404);
   });
+
+  it("returns 404 for an unknown subscription id", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/zenvia/subscriptions/does-not-exist",
+      headers: { "x-api-token": "test-token" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("skips a subscription whose criteria.direction doesn't match the message", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/zenvia/subscriptions",
+      headers: { "x-api-token": "test-token" },
+      payload: {
+        eventType: "MESSAGE_STATUS",
+        webhook: { url: receiver.url },
+        criteria: { channel: "sms", direction: "IN" },
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/zenvia/channels/sms/messages",
+      headers: { "x-api-token": "test-token" },
+      payload: {
+        from: "sms-account",
+        to: "55108888888888",
+        contents: [{ type: "text", text: "Hi Zenvia!" }],
+      },
+    });
+
+    await tick();
+    await tick();
+
+    expect(receiver.events).toHaveLength(0);
+  });
+
+  it("delivers to a subscription with criteria.direction ALL", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/zenvia/subscriptions",
+      headers: { "x-api-token": "test-token" },
+      payload: {
+        eventType: "MESSAGE_STATUS",
+        webhook: { url: receiver.url },
+        criteria: { channel: "sms", direction: "ALL" },
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/zenvia/channels/sms/messages",
+      headers: { "x-api-token": "test-token" },
+      payload: {
+        from: "sms-account",
+        to: "55108888888888",
+        contents: [{ type: "text", text: "Hi Zenvia!" }],
+      },
+    });
+
+    await tick();
+
+    expect(receiver.events).toHaveLength(1);
+  });
 });

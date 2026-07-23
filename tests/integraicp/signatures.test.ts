@@ -119,4 +119,37 @@ describe("IntegraICP signature flow", () => {
     expect(body.data.executionStatus.currentStatus).toBe("PENDING_AUTHORIZATON");
     expect(body.data.clearances.length).toBeGreaterThan(0);
   });
+
+  it("rejects /authentications missing a required query param", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/integraicp/c/test-channel/icp/v3/authentications?secret_data=abc",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe(400101);
+  });
+
+  it("returns 404 when signing with an unknown credentialId", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/integraicp/c/test-channel/icp/v3/signatures",
+      payload: {
+        credentialId: "does-not-exist",
+        secretData: "whatever",
+        requests: [{ contentDigest: sha256Base64("hi") }],
+      },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.code).toBe(404000);
+  });
+
+  it("rejects a signatures body missing required fields", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/integraicp/c/test-channel/icp/v3/signatures",
+      payload: { requests: [] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe(400000);
+  });
 });

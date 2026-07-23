@@ -1,6 +1,12 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { ZodType } from "zod";
 import { scheduleStatusAdvance } from "./scheduler.js";
-import { createSmsMessageSchema, createSubscriptionSchema } from "./schemas.js";
+import {
+  createEmailMessageSchema,
+  createSmsMessageSchema,
+  createSubscriptionSchema,
+  createWhatsappMessageSchema,
+} from "./schemas.js";
 import {
   createMessage,
   createSubscription,
@@ -22,24 +28,30 @@ function toResponse(message: ReturnType<typeof createMessage>) {
   };
 }
 
-export async function createSmsMessageHandler(req: FastifyRequest, reply: FastifyReply) {
-  const parsed = createSmsMessageSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return reply.code(400).send({
-      code: "VALIDATION_ERROR",
-      message: "Validation error",
-      details: parsed.error.issues.map((issue) => ({
-        code: issue.code,
-        path: issue.path.join("."),
-        message: issue.message,
-      })),
-    });
-  }
+function createMessageHandler(channel: string, schema: ZodType) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        code: "VALIDATION_ERROR",
+        message: "Validation error",
+        details: parsed.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
 
-  const message = createMessage("sms", parsed.data);
-  scheduleStatusAdvance(message.id);
-  return reply.code(200).send(toResponse(message));
+    const message = createMessage(channel, parsed.data as Parameters<typeof createMessage>[1]);
+    scheduleStatusAdvance(message.id);
+    return reply.code(200).send(toResponse(message));
+  };
 }
+
+export const createSmsMessageHandler = createMessageHandler("sms", createSmsMessageSchema);
+export const createWhatsappMessageHandler = createMessageHandler("whatsapp", createWhatsappMessageSchema);
+export const createEmailMessageHandler = createMessageHandler("email", createEmailMessageSchema);
 
 function toSubscriptionResponse(subscription: ReturnType<typeof createSubscription>) {
   return {

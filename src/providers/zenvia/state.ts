@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDb } from "../../shared/storage/db.js";
-import type { CreateSmsMessageInput, CreateSubscriptionInput } from "./schemas.js";
+import type { CreateMessageInput, CreateSubscriptionInput } from "./schemas.js";
 
 export interface ZenviaMessage {
   id: string;
@@ -40,7 +40,7 @@ function toMessage(row: MessageRow): ZenviaMessage {
   };
 }
 
-export function createMessage(channel: string, input: CreateSmsMessageInput): ZenviaMessage {
+export function createMessage(channel: string, input: CreateMessageInput): ZenviaMessage {
   const db = getDb();
   const id = randomUUID();
   db.prepare(

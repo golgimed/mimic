@@ -34,10 +34,12 @@ npm test              # vitest, in-process Fastify + :memory: SQLite
 
 Routes mirror the real relative paths. Contract cached at [`docs/vendor/zenvia-openapi-v2.json`](docs/vendor/zenvia-openapi-v2.json).
 
-- `POST /zenvia/channels/sms/messages` — send an SMS (`X-API-TOKEN` header required). Returns the message as sent; no status field (matches the real API).
+- `POST /zenvia/channels/sms/messages` — content: `text` | `template`.
+- `POST /zenvia/channels/whatsapp/messages` — content: `text` | `template` | `file`. Also accepts `idRef`/`contentRef` (reply-to). The real API additionally supports buttons/lists/products/flows/location/contacts content types — out of scope for now, add if GolgiMed needs them.
+- `POST /zenvia/channels/email/messages` — content: `email` (`subject`, `html`, `attachments`) | `template`. Also accepts `representative` (`{type, name}`).
+- All three require `X-API-TOKEN` and return the message as sent; no status field (matches the real API).
 - `POST /zenvia/subscriptions`, `GET /zenvia/subscriptions`, `GET|DELETE /zenvia/subscriptions/:id` — subscribe a webhook URL to `MESSAGE_STATUS` events for a channel.
-- Internally, message status advances `ACCEPTED → SENT → DELIVERED` on a timer (`ZENVIA_STATUS_DELAY_MS`, default 2000ms). Each hop posts a `MESSAGE_STATUS` event to matching subscriptions.
-- Only the SMS channel is implemented. WhatsApp/Email follow the same pattern when needed.
+- Internally, message status advances `ACCEPTED → SENT → DELIVERED` on a timer (`ZENVIA_STATUS_DELAY_MS`, default 2000ms), the same two-hop transition for every channel — a simplification; the real API's exact status codes differ slightly per channel (e.g. WhatsApp also has `READ`). Each hop posts a `MESSAGE_STATUS` event to matching subscriptions.
 
 ### IntegraICP (`/integraicp/c/:channelId/icp/v3/...`)
 
@@ -76,3 +78,4 @@ Neither provider's real sandbox was available while building this — contracts 
 - IntegraICP's real auth requires a human choosing a Clearance and logging into an actual trust provider; the simulator skips straight to issuing a credential. The non-autostart "list clearances" path always returns one fake entry.
 - Zenvia webhook signing/verification (e.g. an HMAC header) isn't confirmed from the spec.
 - Rate-limit (429) behavior and exact error-body shapes for edge cases are best-effort.
+- GolgiMed doesn't currently integrate with Zenvia for any channel: WhatsApp is sent via Meta's Cloud API directly, and SMS/Email delivery are unimplemented stubs (Zenvia is only listed as one *candidate* SMS provider in PP-011). The Zenvia WhatsApp/Email channels here were built ahead of real usage, straight from the public spec. A Meta Cloud API fake (matching what GolgiMed's WhatsApp deliverer actually calls) is a reasonable future addition if WhatsApp simulation is needed — not yet built.

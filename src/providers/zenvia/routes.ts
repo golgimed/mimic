@@ -2,8 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { requireApiToken } from "../../shared/auth/apiToken.js";
 import { requestFaultHook } from "../../shared/admin/applyFaults.js";
 import {
+  createEmailMessageHandler,
   createSmsMessageHandler,
   createSubscriptionHandler,
+  createWhatsappMessageHandler,
   deleteSubscriptionHandler,
   getSubscriptionHandler,
   listSubscriptionsHandler,
@@ -17,6 +19,8 @@ export async function zenviaRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requestFaultHook("zenvia"));
 
   app.post("/channels/sms/messages", createSmsMessageHandler);
+  app.post("/channels/whatsapp/messages", createWhatsappMessageHandler);
+  app.post("/channels/email/messages", createEmailMessageHandler);
 
   app.post("/subscriptions", createSubscriptionHandler);
   app.get("/subscriptions", listSubscriptionsHandler);

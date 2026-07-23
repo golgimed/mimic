@@ -25,3 +25,19 @@ export const createSmsMessageSchema = z.object({
 });
 
 export type CreateSmsMessageInput = z.infer<typeof createSmsMessageSchema>;
+
+// Contract taken from docs/vendor/zenvia-openapi-v2.json:
+// components.schemas["subscription.base"], ["subscription.partial-status.message-status-subscription"]
+export const createSubscriptionSchema = z.object({
+  eventType: z.literal("MESSAGE_STATUS"),
+  webhook: z.object({
+    url: z.string().url(),
+    headers: z.record(z.string()).optional(),
+  }),
+  criteria: z.object({
+    channel: z.string(),
+    direction: z.enum(["IN", "OUT", "ALL"]).optional(),
+  }),
+});
+
+export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>;

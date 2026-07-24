@@ -70,19 +70,29 @@ Keep the architecture simple.
 
 ```
 src/
+    core/
+        server.ts       # Fastify bootstrap, registers enabled providers
+        registry.ts      # provider registry
     providers/
+        index.ts         # registers every known provider
         integraicp/
+            README.md
+            provider.ts   # Provider: { name, register(app), listItems?, getItemDetail? }
         zenvia/
+            README.md
+            provider.ts
     shared/
         auth/
         scheduler/
         storage/
         webhooks/
         admin/
-    server.ts
+    server.ts             # CLI entrypoint
 ```
 
-Providers own their own routes, handlers and state.
+Providers own their own routes, handlers, state, and README. The core (`src/core/`) knows nothing about provider business rules — it only starts Fastify, loads config, registers enabled providers via the registry, and exposes shared infrastructure.
+
+Adding a provider means creating `src/providers/<name>/` and registering it in `src/providers/index.ts` — no other file should need to change.
 
 Shared components should only exist when reused by at least two providers.
 

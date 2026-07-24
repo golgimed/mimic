@@ -19,6 +19,31 @@ export function logDroppedWebhook(input: Omit<DeliverWebhookInput, "timeoutMs" |
     .run(input.provider, input.resourceType, input.resourceId, input.url, JSON.stringify(input.payload));
 }
 
+interface WebhookDeliveryRow {
+  url: string;
+  payload_json: string;
+  status: string;
+  response_code: number | null;
+  created_at: string;
+}
+
+export function listWebhookDeliveries(provider: string, resourceId: string) {
+  const rows = getDb()
+    .prepare(
+      `SELECT url, payload_json, status, response_code, created_at
+       FROM webhook_deliveries WHERE provider = ? AND resource_id = ? ORDER BY created_at`,
+    )
+    .all(provider, resourceId) as WebhookDeliveryRow[];
+
+  return rows.map((d) => ({
+    url: d.url,
+    payload: JSON.parse(d.payload_json),
+    status: d.status,
+    responseCode: d.response_code,
+    createdAt: d.created_at,
+  }));
+}
+
 export async function deliverWebhook(input: DeliverWebhookInput): Promise<void> {
   const { provider, resourceType, resourceId, url, payload, headers, timeoutMs = 5000 } = input;
   const db = getDb();

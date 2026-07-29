@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { createFaultSchema } from "./schemas.js";
 import { createFault, deleteFault, listFaults } from "./faults.js";
 import { getItemDetail, listItems } from "./items.js";
+import { flushDb } from "../storage/flush.js";
 
 export async function adminRoutes(app: FastifyInstance) {
   app.get("/items", async (_req, reply) => {
@@ -36,6 +37,11 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!deleted) {
       return reply.code(404).send({ error: { code: "NOT_FOUND", message: "Fault not found" } });
     }
+    return reply.code(204).send();
+  });
+
+  app.post("/flush", async (_req, reply) => {
+    flushDb();
     return reply.code(204).send();
   });
 }

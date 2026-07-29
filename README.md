@@ -131,6 +131,8 @@ Every endpoint mirrors its real provider's relative path and payload shape as cl
 
 `GET /dashboard` — a single page listing everything the simulator has processed across enabled providers, newest first. Click a row for its raw payload and webhook delivery log.
 
+The "Flush" button (`POST /admin/flush`) wipes every table's data (items, faults, webhook logs) while keeping the schema, so you can reset state between test runs without restarting the server.
+
 ## Fault injection
 
 Simulate failures without touching code:

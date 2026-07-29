@@ -3,30 +3,34 @@
 <head>
 <meta charset="UTF-8" />
 <title>Mimic</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
-  #list { width: 40%; overflow-y: auto; border-right: 1px solid #ccc; }
-  #detail { width: 60%; overflow-y: auto; padding: 16px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 14px; }
-  tr { cursor: pointer; }
-  tr:hover { background: #f5f5f5; }
-  tr.selected { background: #e0ecff; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #eee; }
-  pre { background: #f7f7f7; padding: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
-  h2 { margin-top: 0; }
-  .empty { padding: 16px; color: #888; }
-</style>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-<div id="list">
-  <table>
-    <thead><tr><th>Provider</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
-  <div id="empty" class="empty" style="display:none">No items yet.</div>
+<body class="h-screen flex flex-col font-sans text-slate-800">
+<header class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
+  <h1 class="text-lg font-semibold">Mimic</h1>
+  <button id="flush" class="text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md px-3 py-1.5 transition-colors">
+    Flush
+  </button>
+</header>
+<div class="flex flex-1 overflow-hidden">
+  <div id="list" class="w-2/5 overflow-y-auto border-r border-slate-200 bg-white">
+    <table class="w-full text-sm">
+      <thead class="sticky top-0 bg-slate-50 text-slate-500 uppercase text-xs">
+        <tr>
+          <th class="text-left px-3 py-2">Provider</th>
+          <th class="text-left px-3 py-2">Type</th>
+          <th class="text-left px-3 py-2">Status</th>
+          <th class="text-left px-3 py-2">Created</th>
+        </tr>
+      </thead>
+      <tbody id="rows" class="divide-y divide-slate-100"></tbody>
+    </table>
+    <div id="empty" class="hidden p-4 text-slate-400 text-sm">No items yet.</div>
+  </div>
+  <div id="detail" class="w-3/5 overflow-y-auto p-4">
+    <div class="text-slate-400 text-sm">Select an item to see its detail.</div>
+  </div>
 </div>
-<div id="detail"><div class="empty">Select an item to see its detail.</div></div>
 
 <script>
 let selectedKey = null;
@@ -37,13 +41,18 @@ async function loadItems() {
   const rows = document.getElementById('rows');
   const empty = document.getElementById('empty');
   rows.innerHTML = '';
-  empty.style.display = content.length ? 'none' : 'block';
+  empty.classList.toggle('hidden', content.length > 0);
 
   for (const item of content) {
     const tr = document.createElement('tr');
     const key = item.provider + ':' + item.id;
-    if (key === selectedKey) tr.classList.add('selected');
-    tr.innerHTML = `<td><span class="badge">${item.provider}</span></td><td>${item.type}</td><td>${item.status}</td><td>${new Date(item.createdAt).toLocaleString()}</td>`;
+    tr.className = 'cursor-pointer hover:bg-slate-50' + (key === selectedKey ? ' bg-blue-50' : '');
+    tr.innerHTML = `
+      <td class="px-3 py-2"><span class="inline-block px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600">${item.provider}</span></td>
+      <td class="px-3 py-2">${item.type}</td>
+      <td class="px-3 py-2">${item.status}</td>
+      <td class="px-3 py-2 text-slate-500">${new Date(item.createdAt).toLocaleString()}</td>
+    `;
     tr.addEventListener('click', () => selectItem(item.provider, item.id));
     rows.appendChild(tr);
   }
@@ -55,14 +64,22 @@ async function selectItem(provider, id) {
   const detail = await res.json();
   const el = document.getElementById('detail');
   el.innerHTML = `
-    <h2>${provider} / ${id}</h2>
-    <h3>Payload</h3>
-    <pre>${JSON.stringify(detail.payload, null, 2)}</pre>
-    <h3>Webhook Deliveries (${detail.webhookDeliveries.length})</h3>
-    <pre>${detail.webhookDeliveries.length ? JSON.stringify(detail.webhookDeliveries, null, 2) : '(none)'}</pre>
+    <h2 class="text-base font-semibold mb-3">${provider} / ${id}</h2>
+    <h3 class="text-sm font-medium text-slate-500 mb-1">Payload</h3>
+    <pre class="bg-slate-50 rounded-md p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words mb-4">${JSON.stringify(detail.payload, null, 2)}</pre>
+    <h3 class="text-sm font-medium text-slate-500 mb-1">Webhook Deliveries (${detail.webhookDeliveries.length})</h3>
+    <pre class="bg-slate-50 rounded-md p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words">${detail.webhookDeliveries.length ? JSON.stringify(detail.webhookDeliveries, null, 2) : '(none)'}</pre>
   `;
   loadItems();
 }
+
+document.getElementById('flush').addEventListener('click', async () => {
+  if (!confirm('Flush all data? This deletes every item, fault and webhook log.')) return;
+  await fetch('/admin/flush', { method: 'POST' });
+  selectedKey = null;
+  document.getElementById('detail').innerHTML = '<div class="text-slate-400 text-sm">Select an item to see its detail.</div>';
+  loadItems();
+});
 
 loadItems();
 setInterval(loadItems, 3000);

@@ -218,7 +218,7 @@ Integration tests spin up the app in-process (`net/http/httptest`) against an in
 
 ## Roadmap
 
-- Replace the hand-rolled OpenAPI parser with a real parsing library (e.g. `kin-openapi` or `libopenapi`) to add `$ref`/`oneOf`/`allOf`/`anyOf` support. Tracked as the one open item in [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md).
+- Replace the hand-rolled OpenAPI parser with a real parsing library (e.g. `kin-openapi` or `libopenapi`) to add `$ref`/`oneOf`/`allOf`/`anyOf` support.
 - Everything else is driven by whatever new provider or simulation need comes up next — see [CLAUDE.md](CLAUDE.md)'s "Adding a new provider" section if you want to contribute one.
 
 ## Contributing

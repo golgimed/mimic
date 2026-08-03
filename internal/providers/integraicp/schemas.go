@@ -72,8 +72,8 @@ type SignatureRequestItem struct {
 }
 
 type SignaturesBody struct {
-	CredentialID string                  `json:"credentialId"`
-	SecretData   string                  `json:"secretData"`
+	CredentialID string                 `json:"credentialId"`
+	SecretData   string                 `json:"secretData"`
 	Requests     []SignatureRequestItem `json:"requests"`
 }
 

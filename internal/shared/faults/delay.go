@@ -26,8 +26,10 @@ func SimulateLatency(ctx context.Context, d *time.Duration) {
 	if delay <= 0 {
 		return
 	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
 	select {
-	case <-time.After(delay):
+	case <-timer.C:
 	case <-ctx.Done():
 	}
 }

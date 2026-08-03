@@ -43,20 +43,50 @@ type openAPIFlags struct {
 	conflict string
 }
 
+const version = "0.1.0"
+
 func parseServeFlags(args []string) openAPIFlags {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var f openAPIFlags
 	fs.StringVar(&f.dir, "spec-dir", "", "directory to recursively scan for OpenAPI specs")
 	fs.Var(&f.globs, "spec", "glob pattern matching OpenAPI spec files (repeatable)")
-	fs.StringVar(&f.conflict, "conflict", string(openapi.ConflictStrict), "route conflict mode across specs: strict|merge|priority")
+	fs.StringVar(&f.conflict, "conflict", string(openapi.ConflictStrict), "route conflict mode across specs: strict|priority|merge")
 	_ = fs.Parse(args)
 	return f
 }
 
+func printUsage(w *os.File) {
+	fmt.Fprintln(w, "mimic — simulates third-party provider APIs for local development and testing")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  mimic                 run the server (providers/behavior configured via env vars)")
+	fmt.Fprintln(w, "  mimic serve [flags]   run the server, optionally mounting OpenAPI specs")
+	fmt.Fprintln(w, "  mimic -h | --help     show this help")
+	fmt.Fprintln(w, "  mimic -version        print the version")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "serve flags:")
+	fmt.Fprintln(w, "  -spec-dir <path>   directory to recursively scan for OpenAPI specs")
+	fmt.Fprintln(w, "  -spec <glob>       glob pattern matching OpenAPI spec files (repeatable)")
+	fmt.Fprintln(w, "  -conflict <mode>   route conflict mode across specs: strict|priority|merge (default strict)")
+}
+
 func main() {
 	var oa openAPIFlags
-	if len(os.Args) > 1 && os.Args[1] == "serve" {
-		oa = parseServeFlags(os.Args[2:])
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "serve":
+			oa = parseServeFlags(os.Args[2:])
+		case "-h", "-help", "--help", "help":
+			printUsage(os.Stdout)
+			os.Exit(0)
+		case "-version", "--version", "version":
+			fmt.Println("mimic " + version)
+			os.Exit(0)
+		default:
+			fmt.Fprintf(os.Stderr, "mimic: unknown argument %q\n\n", os.Args[1])
+			printUsage(os.Stderr)
+			os.Exit(2)
+		}
 	}
 
 	_ = config.LoadDotEnv(".env")
@@ -90,7 +120,9 @@ func main() {
 	specDir := oa.dir
 	if specDir == "" && len(oa.globs) == 0 {
 		if info, err := os.Stat("specs"); err == nil && info.IsDir() {
-			specDir = "specs"
+			if found, err := openapi.Discover("specs", nil); err == nil && len(found) > 0 {
+				specDir = "specs"
+			}
 		}
 	}
 

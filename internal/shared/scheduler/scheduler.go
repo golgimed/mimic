@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -81,7 +82,8 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 
 	for _, j := range jobs {
 		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'processing' WHERE id = ?", j.id); err != nil {
-			return err
+			slog.Error("scheduler: failed to mark job processing", "job_id", j.id, "kind", j.kind, "error", err)
+			continue
 		}
 
 		s.mu.RLock()
@@ -94,11 +96,15 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 		}
 
 		if handlerErr != nil {
-			s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id)
-			return handlerErr
+			if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id); err != nil {
+				slog.Error("scheduler: failed to mark job failed", "job_id", j.id, "kind", j.kind, "handler_error", handlerErr, "error", err)
+			} else {
+				slog.Error("scheduler: job handler failed", "job_id", j.id, "kind", j.kind, "error", handlerErr)
+			}
+			continue
 		}
 		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'done' WHERE id = ?", j.id); err != nil {
-			return err
+			slog.Error("scheduler: failed to mark job done", "job_id", j.id, "kind", j.kind, "error", err)
 		}
 	}
 

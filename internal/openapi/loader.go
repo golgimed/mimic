@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -151,7 +152,8 @@ func Discover(dir string, globs []string) ([]string, error) {
 	if dir != "" {
 		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return err
+				slog.Warn("openapi: skipping unreadable path during spec discovery", "path", path, "error", err)
+				return nil
 			}
 			if d.IsDir() {
 				return nil

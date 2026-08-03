@@ -14,13 +14,13 @@ import (
 type FaultKind string
 
 const (
-	FaultDelayMS         FaultKind = "delay_ms"
-	FaultHTTPStatus      FaultKind = "http_status"
-	FaultTimeout         FaultKind = "timeout"
-	FaultInvalidPayload  FaultKind = "invalid_payload"
-	FaultWebhookDropped  FaultKind = "webhook_dropped"
-	FaultWebhookInvalid  FaultKind = "webhook_invalid"
-	FaultRateLimited     FaultKind = "rate_limited"
+	FaultDelayMS        FaultKind = "delay_ms"
+	FaultHTTPStatus     FaultKind = "http_status"
+	FaultTimeout        FaultKind = "timeout"
+	FaultInvalidPayload FaultKind = "invalid_payload"
+	FaultWebhookDropped FaultKind = "webhook_dropped"
+	FaultWebhookInvalid FaultKind = "webhook_invalid"
+	FaultRateLimited    FaultKind = "rate_limited"
 )
 
 type FaultConfig struct {
@@ -126,7 +126,13 @@ func (s *Store) DeleteFaultsByProvider(provider string) error {
 // pattern) faults. A fault with a probability that doesn't fire this time is
 // treated as no match and its remaining_uses is left untouched.
 func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfig, error) {
-	row := s.db.QueryRow(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	row := tx.QueryRow(
 		`SELECT `+faultColumns+`
 		 FROM fault_config
 		 WHERE provider = ? AND (route_pattern = ? OR route_pattern IS NULL)
@@ -143,20 +149,23 @@ func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfi
 	}
 
 	if !behavior.ShouldApply(f.Probability) {
-		return nil, nil
+		return nil, tx.Commit()
 	}
 
 	if f.RemainingUses != nil {
 		if *f.RemainingUses <= 1 {
-			if _, err := s.db.Exec("DELETE FROM fault_config WHERE id = ?", f.ID); err != nil {
+			if _, err := tx.Exec("DELETE FROM fault_config WHERE id = ?", f.ID); err != nil {
 				return nil, err
 			}
 		} else {
-			if _, err := s.db.Exec("UPDATE fault_config SET remaining_uses = remaining_uses - 1 WHERE id = ?", f.ID); err != nil {
+			if _, err := tx.Exec("UPDATE fault_config SET remaining_uses = remaining_uses - 1 WHERE id = ?", f.ID); err != nil {
 				return nil, err
 			}
 		}
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return f, nil
 }

@@ -22,9 +22,9 @@ func VerifyPkce(verifier, storedChallenge string) bool {
 }
 
 type FakeCertificate struct {
-	SerialNumber   string `json:"serialNumber"`
-	IssuerName     string `json:"issuerName"`
-	Validity       struct {
+	SerialNumber string `json:"serialNumber"`
+	IssuerName   string `json:"issuerName"`
+	Validity     struct {
 		NotBefore string `json:"notBefore"`
 		NotAfter  string `json:"notAfter"`
 	} `json:"validity"`

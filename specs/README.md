@@ -3,6 +3,9 @@
 Drop OpenAPI 3.x spec files (`.yaml`, `.yml`, `.json`) here to have Mimic
 serve them as mock providers.
 
+`example.yaml` is a small CRUD-shaped spec mounted by default — copy its
+structure as a starting point for your own specs.
+
 - Each spec is mounted under a route prefix derived from `info.title`
   (slugified). Set `x-mimic-name` at the document root to override the
   derived prefix if it collides with another spec or a hand-written

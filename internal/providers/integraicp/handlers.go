@@ -85,11 +85,11 @@ func authenticationsHandler(store *Store) http.HandlerFunc {
 				},
 				"clearances": []map[string]any{
 					{
-						"clearanceId":        clearanceID,
-						"productName":        "Simulated Provider",
-						"providerName":       "Simulator",
-						"clearanceEndpoint":  "https://simulated-provider.local/clearance/" + clearanceID,
-						"clearanceType":      "IDENTIFICATION",
+						"clearanceId":       clearanceID,
+						"productName":       "Simulated Provider",
+						"providerName":      "Simulator",
+						"clearanceEndpoint": "https://simulated-provider.local/clearance/" + clearanceID,
+						"clearanceType":     "IDENTIFICATION",
 					},
 				},
 			},

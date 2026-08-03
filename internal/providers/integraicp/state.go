@@ -30,8 +30,8 @@ func (s *Store) scanCredential(row interface {
 	Scan(dest ...any) error
 }) (*Credential, error) {
 	var (
-		c           Credential
-		certJSON    string
+		c        Credential
+		certJSON string
 	)
 	if err := row.Scan(&c.ID, &c.ChannelID, &c.SubjectKey, &c.SubjectType, &c.CodeChallenge, &c.CallbackURI, &certJSON, &c.CreatedAt); err != nil {
 		return nil, err

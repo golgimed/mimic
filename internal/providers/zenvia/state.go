@@ -110,9 +110,9 @@ func (s *Store) UpdateMessageStatus(id, status string) error {
 
 func scanSubscription(row interface{ Scan(dest ...any) error }) (*Subscription, error) {
 	var (
-		sub            Subscription
-		headersJSON    sql.NullString
-		criteriaDir    sql.NullString
+		sub         Subscription
+		headersJSON sql.NullString
+		criteriaDir sql.NullString
 	)
 	if err := row.Scan(&sub.ID, &sub.EventType, &sub.WebhookURL, &headersJSON, &sub.CriteriaChannel, &criteriaDir, &sub.Status, &sub.CreatedAt, &sub.UpdatedAt); err != nil {
 		return nil, err

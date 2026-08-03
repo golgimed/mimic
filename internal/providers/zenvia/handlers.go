@@ -57,9 +57,9 @@ func createMessageHandler(channel string, store *Store, scheduleAdvance func(str
 }
 
 type subscriptionResponse struct {
-	ID       string `json:"id"`
+	ID        string `json:"id"`
 	EventType string `json:"eventType"`
-	Webhook  struct {
+	Webhook   struct {
 		URL     string            `json:"url"`
 		Headers map[string]string `json:"headers,omitempty"`
 	} `json:"webhook"`

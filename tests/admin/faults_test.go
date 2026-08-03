@@ -123,6 +123,39 @@ func TestFaultConsumedOnce(t *testing.T) {
 	}
 }
 
+func TestFaultConsumedOnceUnderConcurrency(t *testing.T) {
+	app := testutil.New(t, 0)
+
+	app.Do(t, "PUT", "/admin/faults", nil, map[string]any{
+		"provider": "zenvia", "routePattern": "/zenvia/channels/sms/messages",
+		"faultKind": "http_status", "faultValue": "500", "times": 1,
+	})
+
+	const n = 20
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			defer wg.Done()
+			codes[i] = createSmsMessage(t, app).Code
+		}(i)
+	}
+	wg.Wait()
+
+	fired := 0
+	for _, c := range codes {
+		if c == 500 {
+			fired++
+		} else if c != 200 {
+			t.Fatalf("unexpected status code %d", c)
+		}
+	}
+	if fired != 1 {
+		t.Fatalf("expected exactly 1 request to observe the fault, got %d", fired)
+	}
+}
+
 type webhookReceiver struct {
 	server *httptest.Server
 	mu     sync.Mutex

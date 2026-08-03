@@ -2,6 +2,8 @@ package openapi
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -55,7 +57,11 @@ func (route Route) listHandler(store *Store) http.HandlerFunc {
 
 func (route Route) createHandler(store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body := decodeBody(r)
+		body, err := decodeBody(r)
+		if err != nil {
+			http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		id := resourceID(body, route.Plan.Schema)
 		body["id"] = id
 		fillMissingFields(body, route.Plan.Schema)
@@ -102,7 +108,11 @@ func (route Route) updateHandler(store *Store) http.HandlerFunc {
 			return
 		}
 
-		body := decodeBody(r)
+		body, err := decodeBody(r)
+		if err != nil {
+			http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		body["id"] = id
 		res, err := store.Update(route.SpecName, route.ResourceType, id, body)
 		if err != nil {
@@ -128,15 +138,21 @@ func (route Route) deleteHandler(store *Store) http.HandlerFunc {
 	}
 }
 
-func decodeBody(r *http.Request) map[string]any {
+// decodeBody parses the request body as a JSON object. A missing/empty body
+// is treated as {} (create/update handlers fill in any declared-but-absent
+// fields), but malformed JSON is a client error.
+func decodeBody(r *http.Request) (map[string]any, error) {
 	body := map[string]any{}
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&body)
+	if r.Body == nil {
+		return body, nil
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		return nil, err
 	}
 	if body == nil {
 		body = map[string]any{}
 	}
-	return body
+	return body, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

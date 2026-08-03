@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: CRUD Example
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      responses:
+        "200":
+          description: All widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+    post:
+      operationId: createWidget
+      responses:
+        "201":
+          description: Created widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  status:
+                    type: string
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      responses:
+        "200":
+          description: A widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+    put:
+      operationId: updateWidget
+      responses:
+        "200":
+          description: Updated widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+    delete:
+      operationId: deleteWidget
+      responses:
+        "204":
+          description: Deleted

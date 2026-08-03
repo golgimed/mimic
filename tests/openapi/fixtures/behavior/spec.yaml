@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info:
+  title: Behavior Spec
+  version: 1.0.0
+paths:
+  /widgets:
+    get:
+      operationId: listWidgets
+      x-mimic-behavior:
+        faultKind: http_status
+        faultValue: "503"
+        probability: 1
+      responses:
+        "200":
+          description: Widgets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string

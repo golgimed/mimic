@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: CRUD Persist True
+  version: 1.0.0
+x-mimic-persist: true
+paths:
+  /widgets:
+    post:
+      operationId: createWidget
+      responses:
+        "201":
+          description: Created widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+  /widgets/{id}:
+    get:
+      operationId: getWidget
+      responses:
+        "200":
+          description: A widget
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string

@@ -1,0 +1,39 @@
+openapi: 3.0.3
+info:
+  title: Petstore Example
+  version: 1.0.0
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              example:
+                pets:
+                  - id: "1"
+                    name: "Rex"
+    post:
+      operationId: createPet
+      responses:
+        "201":
+          description: Created pet, generated from schema (no example given)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  age:
+                    type: integer
+  /pets/{id}:
+    get:
+      operationId: getPet
+      responses:
+        "200":
+          description: No example or schema, falls back to {}

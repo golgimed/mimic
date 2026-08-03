@@ -1,19 +1,13 @@
-FROM node:22-slim AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /mimic ./cmd/mimic
 
-FROM node:22-slim
-WORKDIR /app
-ENV NODE_ENV=production
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-COPY --from=build /app/dist ./dist
-COPY db/migrations ./db/migrations
-COPY dashboard ./dashboard
+FROM gcr.io/distroless/static-debian12
+COPY --from=build /mimic /mimic
 
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+HEALTHCHECK CMD ["/mimic", "healthcheck"]
+ENTRYPOINT ["/mimic"]

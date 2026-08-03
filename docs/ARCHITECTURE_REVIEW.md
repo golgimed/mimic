@@ -4,6 +4,15 @@
 **Scope:** full codebase as of `feature/openapi-spec` (uncommitted Go rewrite, TS implementation being removed).
 **Date:** 2026-08-02
 
+> **Update 2026-08-02 (release audit):** every P0 and P1 recommendation below
+> is implemented, as is nearly all of P2 (probability/latency-distribution
+> behavior, rate limiting as a fault kind, the `x-mimic-behavior` vendor
+> extension). The one remaining open item is the OpenAPI parser-library
+> migration under [Product Vision](#product-vision) — deferred, mitigated by
+> the loud unsupported-construct warnings already in place, and tracked in
+> the README's Roadmap. Treat the rest of this document as historical record
+> of what motivated those changes, not an open TODO list.
+
 ---
 
 ## Executive Summary

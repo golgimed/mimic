@@ -77,6 +77,9 @@ internal/
         registry.go     # Provider type + in-memory registry (dependency-free)
     core/
         mux.go           # builds the root http.ServeMux, CORS, /health, /dashboard
+    openapi/
+        loader.go        # parses OpenAPI 3.x specs from specs/
+        provider.go      # turns parsed specs into a registry.Provider
     providers/
         providers.go     # registers every known provider
         integraicp/
@@ -88,6 +91,8 @@ internal/
     shared/
         auth/
         faults/
+        behavior/         # probability + latency-distribution primitives
+        httpx/             # shared JSON response helpers
         scheduler/
         storage/
         webhooks/
@@ -96,6 +101,7 @@ internal/
 
 db/migrations/           # embedded (go:embed) SQL migrations
 dashboard/                # embedded (go:embed) static dashboard HTML
+specs/                    # user-dropped OpenAPI specs, served by internal/openapi
 ```
 
 Providers own their own routes, handlers, state, and README. `internal/core` knows nothing about provider business rules — it only builds the HTTP mux, loads config, registers enabled providers via the registry, and exposes shared infrastructure.

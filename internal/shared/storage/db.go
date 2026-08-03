@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // registers the "sqlite" driver used by sql.Open below
 )
 
 // Open opens (creating parent dirs as needed) a SQLite database at path and

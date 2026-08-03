@@ -31,9 +31,9 @@ func (d Distribution) Sample() time.Duration {
 	var ms float64
 	switch d.Kind {
 	case DistUniform:
-		ms = d.MinMS + rand.Float64()*(d.MaxMS-d.MinMS)
+		ms = d.MinMS + rand.Float64()*(d.MaxMS-d.MinMS) //NOSONAR -- simulated latency jitter, not security-sensitive
 	case DistNormal:
-		ms = rand.NormFloat64()*d.StdDev + d.MeanMS
+		ms = rand.NormFloat64()*d.StdDev + d.MeanMS //NOSONAR -- simulated latency jitter, not security-sensitive
 	default: // DistFixed or unrecognized
 		ms = d.MS
 	}

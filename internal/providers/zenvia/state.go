@@ -3,6 +3,7 @@ package zenvia
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 
 	"github.com/google/uuid"
 )
@@ -78,7 +79,7 @@ func (s *Store) ListMessages() ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []Message{}
 	for rows.Next() {
@@ -97,7 +98,7 @@ func (s *Store) GetMessage(id string) (*Message, error) {
 		 FROM zenvia_messages WHERE id = ?`, id,
 	)
 	m, err := scanMessage(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return m, err
@@ -166,7 +167,7 @@ func (s *Store) ListSubscriptions() ([]Subscription, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []Subscription{}
 	for rows.Next() {
@@ -185,7 +186,7 @@ func (s *Store) GetSubscription(id string) (*Subscription, error) {
 		 FROM zenvia_subscriptions WHERE id = ?`, id,
 	)
 	sub, err := scanSubscription(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return sub, err
@@ -210,7 +211,7 @@ func (s *Store) FindActiveSubscriptionsForChannel(channel string) ([]Subscriptio
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []Subscription{}
 	for rows.Next() {

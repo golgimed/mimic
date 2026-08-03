@@ -5,6 +5,7 @@ package admin
 
 import (
 	"database/sql"
+	"errors"
 	"sync"
 
 	"github.com/golgimed/mimic/internal/shared/behavior"
@@ -46,6 +47,21 @@ func NewStore(db *sql.DB) *Store {
 
 const faultColumns = `id, provider, route_pattern, fault_kind, fault_value, remaining_uses, created_at, probability, delay_distribution`
 
+// Query strings below concatenate faultColumns at compile time (both are Go
+// constants) — nothing request-derived ever reaches the SQL text; all
+// variable input is passed as bind parameters.
+const (
+	selectFaultByID = `SELECT ` + faultColumns + `
+		FROM fault_config WHERE id = ?`
+	selectAllFaults = `SELECT ` + faultColumns + `
+		FROM fault_config ORDER BY created_at`
+	selectMatchingFault = `SELECT ` + faultColumns + `
+		FROM fault_config
+		WHERE provider = ? AND (route_pattern = ? OR route_pattern IS NULL)
+		ORDER BY route_pattern IS NULL ASC, created_at ASC
+		LIMIT 1`
+)
+
 func scanFault(row interface {
 	Scan(dest ...any) error
 }) (*FaultConfig, error) {
@@ -76,22 +92,16 @@ func (s *Store) CreateFault(input CreateFaultInput) (*FaultConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	row := s.db.QueryRow(
-		`SELECT `+faultColumns+`
-		 FROM fault_config WHERE id = ?`, id,
-	)
+	row := s.db.QueryRow(selectFaultByID, id)
 	return scanFault(row)
 }
 
 func (s *Store) ListFaults() ([]FaultConfig, error) {
-	rows, err := s.db.Query(
-		`SELECT ` + faultColumns + `
-		 FROM fault_config ORDER BY created_at`,
-	)
+	rows, err := s.db.Query(selectAllFaults)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []FaultConfig{}
 	for rows.Next() {
@@ -130,18 +140,11 @@ func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfi
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
-	row := tx.QueryRow(
-		`SELECT `+faultColumns+`
-		 FROM fault_config
-		 WHERE provider = ? AND (route_pattern = ? OR route_pattern IS NULL)
-		 ORDER BY route_pattern IS NULL ASC, created_at ASC
-		 LIMIT 1`,
-		provider, routePattern,
-	)
+	row := tx.QueryRow(selectMatchingFault, provider, routePattern)
 	f, err := scanFault(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {

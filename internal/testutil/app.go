@@ -48,7 +48,7 @@ func New(t *testing.T, zenviaStatusDelay time.Duration) *App {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	if err := storage.RunMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)

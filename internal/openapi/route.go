@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const contentTypeJSON = "application/json"
+
 // Route is this package's private internal model: everything needed to
 // register and serve one operation from a spec. It never leaves this
 // package — provider.go converts a []Route into a registry.Provider.
@@ -51,66 +53,68 @@ type ResponsePlan struct {
 func BuildRoutes(spec *LoadedSpec, prefix string, persist bool) []Route {
 	var routes []Route
 
-	paths := make([]string, 0, len(spec.doc.Paths))
-	for p := range spec.doc.Paths {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
-
-	for _, path := range paths {
+	for _, path := range sortedKeys(spec.doc.Paths) {
 		resourceType, idParam, isItem, supported := inferResource(path)
-
 		methods := spec.doc.Paths[path]
-		methodNames := make([]string, 0, len(methods))
-		for m := range methods {
-			methodNames = append(methodNames, m)
-		}
-		sort.Strings(methodNames)
 
-		for _, m := range methodNames {
-			lm := strings.ToLower(m)
-			if !httpMethods[lm] {
+		for _, m := range sortedKeys(methods) {
+			if !httpMethods[strings.ToLower(m)] {
 				continue
 			}
-			op := methods[m]
-			method := strings.ToUpper(m)
-			routePath := "/" + strings.Trim(prefix, "/") + path
-
-			plan := buildResponsePlan(op)
-			if plan.Example == nil && plan.Schema != nil {
-				plan.Generated = generateFromSchema(plan.Schema, seededFaker(method+" "+routePath))
-			}
-
-			route := Route{
-				Method:   method,
-				Path:     routePath,
-				Plan:     plan,
-				Source:   spec.Path,
-				SpecName: prefix,
-				Behavior: op.Behavior,
-			}
-			if supported {
-				route.ResourceType = resourceType
-				route.IDParam = idParam
-				route.Op = inferOp(method, isItem)
-				route.Persist = persist && route.Op != OpNone
-			}
-			routes = append(routes, route)
+			routes = append(routes, buildRoute(spec, prefix, path, m, methods[m], resourceType, idParam, isItem, supported, persist))
 		}
 	}
 
 	return routes
 }
 
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// buildRoute converts one spec operation into a Route, filling in the
+// inferred REST shape (resourceType/idParam/Op/Persist) only when supported
+// is true — non-CRUD-shaped routes are served straight from Plan.
+func buildRoute(spec *LoadedSpec, prefix, path, m string, op operation, resourceType, idParam string, isItem, supported, persist bool) Route {
+	method := strings.ToUpper(m)
+	routePath := "/" + strings.Trim(prefix, "/") + path
+
+	plan := buildResponsePlan(op)
+	if plan.Example == nil && plan.Schema != nil {
+		plan.Generated = generateFromSchema(plan.Schema, seededFaker(method+" "+routePath))
+	}
+
+	route := Route{
+		Method:   method,
+		Path:     routePath,
+		Plan:     plan,
+		Source:   spec.Path,
+		SpecName: prefix,
+		Behavior: op.Behavior,
+	}
+	if supported {
+		route.ResourceType = resourceType
+		route.IDParam = idParam
+		route.Op = inferOp(method, isItem)
+		route.Persist = persist && route.Op != OpNone
+	}
+	return route
+}
+
 func buildResponsePlan(op operation) ResponsePlan {
 	status, resp, ok := pickResponse(op.Responses)
 	if !ok {
-		return ResponsePlan{StatusCode: 200, ContentType: "application/json"}
+		return ResponsePlan{StatusCode: 200, ContentType: contentTypeJSON}
 	}
 
 	mt, contentType, ok := pickMediaType(resp.Content)
 	if !ok {
-		return ResponsePlan{StatusCode: status, ContentType: "application/json"}
+		return ResponsePlan{StatusCode: status, ContentType: contentTypeJSON}
 	}
 
 	example := pickExample(mt)
@@ -158,8 +162,8 @@ func pickResponse(responses map[string]response) (int, response, bool) {
 // pickMediaType prefers application/json, falling back to the first
 // declared media type (in a deterministic, sorted order).
 func pickMediaType(content map[string]mediaType) (mediaType, string, bool) {
-	if mt, ok := content["application/json"]; ok {
-		return mt, "application/json", true
+	if mt, ok := content[contentTypeJSON]; ok {
+		return mt, contentTypeJSON, true
 	}
 	if len(content) == 0 {
 		return mediaType{}, "", false

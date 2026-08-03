@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -43,7 +44,11 @@ type openAPIFlags struct {
 	conflict string
 }
 
-const version = "0.1.0"
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 func parseServeFlags(args []string) openAPIFlags {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
@@ -56,39 +61,84 @@ func parseServeFlags(args []string) openAPIFlags {
 }
 
 func printUsage(w *os.File) {
-	fmt.Fprintln(w, "mimic — simulates third-party provider APIs for local development and testing")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  mimic                 run the server (providers/behavior configured via env vars)")
-	fmt.Fprintln(w, "  mimic serve [flags]   run the server, optionally mounting OpenAPI specs")
-	fmt.Fprintln(w, "  mimic -h | --help     show this help")
-	fmt.Fprintln(w, "  mimic -version        print the version")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "serve flags:")
-	fmt.Fprintln(w, "  -spec-dir <path>   directory to recursively scan for OpenAPI specs")
-	fmt.Fprintln(w, "  -spec <glob>       glob pattern matching OpenAPI spec files (repeatable)")
-	fmt.Fprintln(w, "  -conflict <mode>   route conflict mode across specs: strict|priority|merge (default strict)")
+	_, _ = fmt.Fprintln(w, "mimic — simulates third-party provider APIs for local development and testing")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Usage:")
+	_, _ = fmt.Fprintln(w, "  mimic                 run the server (providers/behavior configured via env vars)")
+	_, _ = fmt.Fprintln(w, "  mimic serve [flags]   run the server, optionally mounting OpenAPI specs")
+	_, _ = fmt.Fprintln(w, "  mimic -h | --help     show this help")
+	_, _ = fmt.Fprintln(w, "  mimic -version        print the version")
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "serve flags:")
+	_, _ = fmt.Fprintln(w, "  -spec-dir <path>   directory to recursively scan for OpenAPI specs")
+	_, _ = fmt.Fprintln(w, "  -spec <glob>       glob pattern matching OpenAPI spec files (repeatable)")
+	_, _ = fmt.Fprintln(w, "  -conflict <mode>   route conflict mode across specs: strict|priority|merge (default strict)")
 }
 
 func main() {
-	var oa openAPIFlags
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "serve":
-			oa = parseServeFlags(os.Args[2:])
-		case "-h", "-help", "--help", "help":
-			printUsage(os.Stdout)
-			os.Exit(0)
-		case "-version", "--version", "version":
-			fmt.Println("mimic " + version)
-			os.Exit(0)
-		default:
-			fmt.Fprintf(os.Stderr, "mimic: unknown argument %q\n\n", os.Args[1])
-			printUsage(os.Stderr)
-			os.Exit(2)
-		}
-	}
+	oa := parseArgs(os.Args[1:])
+	run(oa)
+}
 
+// parseArgs dispatches the top-level CLI argument (if any). "-h"/"-version"
+// and unknown arguments exit directly, matching the previous inline switch
+// in main(). Only "serve" (or no argument) returns normally.
+func parseArgs(args []string) openAPIFlags {
+	if len(args) == 0 {
+		return openAPIFlags{}
+	}
+	switch args[0] {
+	case "serve":
+		return parseServeFlags(args[1:])
+	case "-h", "-help", "--help", "help":
+		printUsage(os.Stdout)
+		os.Exit(0)
+	case "-version", "--version", "version":
+		fmt.Printf("mimic %s (commit %s, built %s)\n", version, commit, date)
+		os.Exit(0)
+	default:
+		fmt.Fprintf(os.Stderr, "mimic: unknown argument %q\n\n", args[0])
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
+	panic("unreachable")
+}
+
+// discoverSpecDir returns the "specs" directory when oa didn't explicitly
+// set -spec-dir/-spec and a non-empty "specs" directory exists in the cwd.
+func discoverSpecDir(oa openAPIFlags) string {
+	if oa.dir != "" || len(oa.globs) > 0 {
+		return oa.dir
+	}
+	info, err := os.Stat("specs")
+	if err != nil || !info.IsDir() {
+		return ""
+	}
+	found, err := openapi.Discover("specs", nil)
+	if err != nil || len(found) == 0 {
+		return ""
+	}
+	return "specs"
+}
+
+func registerOpenAPIIfConfigured(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, oa openAPIFlags, specDir string, cfg config.Config, log *slog.Logger) {
+	if specDir == "" && len(oa.globs) == 0 {
+		return
+	}
+	specCount, routeCount, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{
+		SpecDir:        specDir,
+		SpecGlobs:      oa.globs,
+		ConflictMode:   openapi.ConflictMode(oa.conflict),
+		PersistDefault: cfg.OpenAPIPersist,
+	}, log)
+	if err != nil {
+		log.Error("failed to register openapi adapter", "error", err)
+		os.Exit(1)
+	}
+	log.Info("openapi specs loaded", "specs", specCount, "routes", routeCount)
+}
+
+func run(oa openAPIFlags) {
 	_ = config.LoadDotEnv(".env")
 	cfg, err := config.Load()
 	if err != nil {
@@ -117,23 +167,8 @@ func main() {
 	sched := scheduler.New(db)
 	providers.RegisterAll(reg, db, faultStore, sched, cfg.ZenviaStatusDelay)
 
-	specDir := oa.dir
-	if specDir == "" && len(oa.globs) == 0 {
-		if info, err := os.Stat("specs"); err == nil && info.IsDir() {
-			if found, err := openapi.Discover("specs", nil); err == nil && len(found) > 0 {
-				specDir = "specs"
-			}
-		}
-	}
-
-	if specDir != "" || len(oa.globs) > 0 {
-		specCount, routeCount, err := providers.RegisterOpenAPI(reg, db, faultStore, specDir, oa.globs, openapi.ConflictMode(oa.conflict), cfg.OpenAPIPersist, log)
-		if err != nil {
-			log.Error("failed to register openapi adapter", "error", err)
-			os.Exit(1)
-		}
-		log.Info("openapi specs loaded", "specs", specCount, "routes", routeCount)
-	}
+	specDir := discoverSpecDir(oa)
+	registerOpenAPIIfConfigured(reg, db, faultStore, oa, specDir, cfg, log)
 
 	l := lane.New(log, lane.WithShutdownTimeout(10*time.Second))
 

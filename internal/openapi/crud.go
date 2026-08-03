@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const errNotFound = "not found"
+
 // handler picks the http.HandlerFunc that serves this route: the static
 // example/schema-stub handler when persistence is off (or the route isn't
 // CRUD-shaped), otherwise a Store-backed CRUD handler for route.Op.
@@ -87,7 +89,7 @@ func (route Route) readHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if res == nil {
-			http.Error(w, "not found", http.StatusNotFound)
+			http.Error(w, errNotFound, http.StatusNotFound)
 			return
 		}
 		writeJSON(w, http.StatusOK, res.Payload)
@@ -104,7 +106,7 @@ func (route Route) updateHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if existing == nil {
-			http.Error(w, "not found", http.StatusNotFound)
+			http.Error(w, errNotFound, http.StatusNotFound)
 			return
 		}
 
@@ -131,7 +133,7 @@ func (route Route) deleteHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if !deleted {
-			http.Error(w, "not found", http.StatusNotFound)
+			http.Error(w, errNotFound, http.StatusNotFound)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -156,7 +158,7 @@ func decodeBody(r *http.Request) (map[string]any, error) {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

@@ -3,6 +3,7 @@ package openapi
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 )
 
 // Store persists CRUD-shaped resources for OpenAPI-mocked routes. Unlike
@@ -62,7 +63,7 @@ func (s *Store) Get(specName, resourceType, id string) (*Resource, error) {
 		specName, resourceType, id,
 	)
 	res, err := scanResource(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return res, err
@@ -77,7 +78,7 @@ func (s *Store) List(specName, resourceType string) ([]Resource, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []Resource{}
 	for rows.Next() {

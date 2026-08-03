@@ -23,7 +23,7 @@ func TestReadyEndpointPingsDB(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	app.DB.Close()
+	_ = app.DB.Close()
 	rec = app.Do(t, "GET", "/ready", nil, nil)
 	if rec.Code == http.StatusOK {
 		t.Fatalf("expected non-200 once the DB is closed, got %d", rec.Code)
@@ -65,7 +65,7 @@ func TestCORSPreflightOptions(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", rec.Code)
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Methods"); got == "" {
+	if rec.Header().Get("Access-Control-Allow-Methods") == "" {
 		t.Error("expected Access-Control-Allow-Methods to be set")
 	}
 }

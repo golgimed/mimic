@@ -15,5 +15,5 @@ func ShouldApply(p *float64) bool {
 	if *p <= 0 {
 		return false
 	}
-	return rand.Float64() < *p
+	return rand.Float64() < *p //NOSONAR -- fault-injection probability roll, not security-sensitive
 }

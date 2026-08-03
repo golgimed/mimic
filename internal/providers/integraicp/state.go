@@ -3,6 +3,7 @@ package integraicp
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 
 	"github.com/google/uuid"
 )
@@ -80,7 +81,7 @@ func (s *Store) ListCredentials() ([]Credential, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []Credential{}
 	for rows.Next() {
@@ -99,7 +100,7 @@ func (s *Store) GetCredential(id string) (*Credential, bool, error) {
 		 FROM integraicp_credentials WHERE id = ?`, id,
 	)
 	c, err := s.scanCredential(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, false, nil
 	}
 	if err != nil {

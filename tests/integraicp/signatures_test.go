@@ -9,6 +9,16 @@ import (
 	"github.com/golgimed/mimic/internal/testutil"
 )
 
+// executionStatusBody mirrors IntegraICP's executionStatus response object,
+// shared across the several endpoints that return it.
+type executionStatusBody struct {
+	CurrentStatus string `json:"currentStatus"`
+}
+
+type subjectIdentificationBody struct {
+	IdentificationKey string `json:"identificationKey"`
+}
+
 func pkce() (verifier, challenge string) {
 	verifier = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
 	sum := sha256.Sum256([]byte(verifier))
@@ -52,12 +62,8 @@ func TestSignatureFlowEndToEnd(t *testing.T) {
 	}
 	var credBody struct {
 		Data struct {
-			ExecutionStatus struct {
-				CurrentStatus string `json:"currentStatus"`
-			} `json:"executionStatus"`
-			SubjectIdentification struct {
-				IdentificationKey string `json:"identificationKey"`
-			} `json:"subjectIdentification"`
+			ExecutionStatus       executionStatusBody       `json:"executionStatus"`
+			SubjectIdentification subjectIdentificationBody `json:"subjectIdentification"`
 		} `json:"data"`
 	}
 	testutil.DecodeJSON(t, credRec, &credBody)
@@ -80,10 +86,8 @@ func TestSignatureFlowEndToEnd(t *testing.T) {
 	}
 	var sigBody struct {
 		Data struct {
-			ExecutionStatus struct {
-				CurrentStatus string `json:"currentStatus"`
-			} `json:"executionStatus"`
-			Signatures []map[string]any `json:"signatures"`
+			ExecutionStatus executionStatusBody `json:"executionStatus"`
+			Signatures      []map[string]any    `json:"signatures"`
 		} `json:"data"`
 	}
 	testutil.DecodeJSON(t, sigRec, &sigBody)
@@ -173,14 +177,12 @@ func TestClearancesListWhenAutostartOmitted(t *testing.T) {
 	}
 	var body struct {
 		Data struct {
-			ExecutionStatus struct {
-				CurrentStatus string `json:"currentStatus"`
-			} `json:"executionStatus"`
-			Clearances []map[string]any `json:"clearances"`
+			ExecutionStatus executionStatusBody `json:"executionStatus"`
+			Clearances      []map[string]any    `json:"clearances"`
 		} `json:"data"`
 	}
 	testutil.DecodeJSON(t, rec, &body)
-	if body.Data.ExecutionStatus.CurrentStatus != "PENDING_AUTHORIZATON" {
+	if body.Data.ExecutionStatus.CurrentStatus != "PENDING_AUTHORIZATON" { //nolint:misspell // official IntegraICP contract value
 		t.Errorf("currentStatus = %v", body.Data.ExecutionStatus.CurrentStatus)
 	}
 	if len(body.Data.Clearances) == 0 {

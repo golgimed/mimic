@@ -38,6 +38,14 @@ See [README.md](README.md#adding-a-new-provider) — briefly: create
 then register it in `internal/providers/providers.go`. No other file should
 need to change.
 
+## Releases
+
+Tags follow SemVer (`vMAJOR.MINOR.PATCH`). Maintainers cut a release by
+tagging `main` and pushing the tag — `git tag vX.Y.Z && git push origin
+vX.Y.Z` — which triggers `.github/workflows/release.yml` to cross-compile
+binaries, publish a GitHub Release with checksums, and push the container
+image to GHCR.
+
 ## Pull requests
 
 Keep PRs scoped to one change. Explain the *why* in the description, not

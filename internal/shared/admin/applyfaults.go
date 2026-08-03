@@ -11,6 +11,11 @@ import (
 	"github.com/golgimed/mimic/internal/shared/faults"
 )
 
+const (
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
+)
+
 // RequestFaultHook returns middleware that checks for a configured fault
 // matching this provider + routePattern before the real handler runs. Only
 // request-time fault kinds are handled here (delay_ms, http_status, timeout,
@@ -19,70 +24,81 @@ import (
 func RequestFaultHook(store *Store, provider, routePattern string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fault, err := store.ConsumeMatchingFault(provider, routePattern)
-			if err != nil || fault == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			switch fault.FaultKind {
-			case FaultDelayMS:
-				var d time.Duration
-				if fault.DelayDistribution != nil {
-					if dist, err := behavior.ParseDistribution(*fault.DelayDistribution); err == nil {
-						d = dist.Sample()
-					}
-				} else if fault.FaultValue != nil {
-					ms, _ := strconv.ParseInt(*fault.FaultValue, 10, 64)
-					d = time.Duration(ms) * time.Millisecond
-				}
-				faults.SimulateLatency(r.Context(), &d)
-				next.ServeHTTP(w, r)
-
-			case FaultRateLimited:
-				limit, window, ok := parseRateLimitValue(fault.FaultValue)
-				if !ok || faults.CheckRateLimit(&store.rateLimiters, provider+"|"+routePattern, limit, window, time.Now()) {
-					next.ServeHTTP(w, r)
-					return
-				}
-				w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusTooManyRequests)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"error": map[string]any{
-						"code":    http.StatusTooManyRequests,
-						"message": "Simulated rate limit via fault injection",
-					},
-				})
-
-			case FaultHTTPStatus:
-				status := 500
-				if fault.FaultValue != nil {
-					if v, err := strconv.Atoi(*fault.FaultValue); err == nil {
-						status = v
-					}
-				}
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(status)
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"error": map[string]any{
-						"code":    status,
-						"message": "Simulated " + strconv.Itoa(status) + " via fault injection",
-					},
-				})
-
-			case FaultInvalidPayload:
-				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"truncated": tr`))
-
-			case FaultTimeout:
-				<-r.Context().Done()
-
-			default:
-				next.ServeHTTP(w, r)
-			}
+			applyFault(store, provider, routePattern, next, w, r)
 		})
 	}
+}
+
+func applyFault(store *Store, provider, routePattern string, next http.Handler, w http.ResponseWriter, r *http.Request) {
+	fault, err := store.ConsumeMatchingFault(provider, routePattern)
+	if err != nil || fault == nil {
+		next.ServeHTTP(w, r)
+		return
+	}
+
+	switch fault.FaultKind {
+	case FaultDelayMS:
+		applyDelayFault(fault, next, w, r)
+	case FaultRateLimited:
+		applyRateLimitFault(store, provider, routePattern, fault, next, w, r)
+	case FaultHTTPStatus:
+		applyHTTPStatusFault(fault, w)
+	case FaultInvalidPayload:
+		w.Header().Set(headerContentType, contentTypeJSON)
+		_, _ = w.Write([]byte(`{"truncated": tr`))
+	case FaultTimeout:
+		<-r.Context().Done()
+	default:
+		next.ServeHTTP(w, r)
+	}
+}
+
+func applyDelayFault(fault *FaultConfig, next http.Handler, w http.ResponseWriter, r *http.Request) {
+	var d time.Duration
+	if fault.DelayDistribution != nil {
+		if dist, err := behavior.ParseDistribution(*fault.DelayDistribution); err == nil {
+			d = dist.Sample()
+		}
+	} else if fault.FaultValue != nil {
+		ms, _ := strconv.ParseInt(*fault.FaultValue, 10, 64)
+		d = time.Duration(ms) * time.Millisecond
+	}
+	faults.SimulateLatency(r.Context(), &d)
+	next.ServeHTTP(w, r)
+}
+
+func applyRateLimitFault(store *Store, provider, routePattern string, fault *FaultConfig, next http.Handler, w http.ResponseWriter, r *http.Request) {
+	limit, window, ok := parseRateLimitValue(fault.FaultValue)
+	if !ok || faults.CheckRateLimit(&store.rateLimiters, provider+"|"+routePattern, limit, window, time.Now()) {
+		next.ServeHTTP(w, r)
+		return
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(int(window.Seconds())))
+	w.Header().Set(headerContentType, contentTypeJSON)
+	w.WriteHeader(http.StatusTooManyRequests)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]any{
+			"code":    http.StatusTooManyRequests,
+			"message": "Simulated rate limit via fault injection",
+		},
+	})
+}
+
+func applyHTTPStatusFault(fault *FaultConfig, w http.ResponseWriter) {
+	status := 500
+	if fault.FaultValue != nil {
+		if v, err := strconv.Atoi(*fault.FaultValue); err == nil {
+			status = v
+		}
+	}
+	w.Header().Set(headerContentType, contentTypeJSON)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"error": map[string]any{
+			"code":    status,
+			"message": "Simulated " + strconv.Itoa(status) + " via fault injection",
+		},
+	})
 }
 
 // parseRateLimitValue parses a FaultValue of the shape "<limit>/<window>"

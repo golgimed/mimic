@@ -56,6 +56,14 @@ func authenticationsHandler(store *Store) http.HandlerFunc {
 				sendError(w, http.StatusInternalServerError, 500000, err.Error())
 				return
 			}
+			// Restrict to http(s) callback_uri values: real IntegraICP clients
+			// only ever register http(s) callbacks, and rejecting anything
+			// else (javascript:, data:, etc.) closes the open-redirect vector
+			// without narrowing the documented contract.
+			if location.Scheme != "http" && location.Scheme != "https" {
+				sendError(w, http.StatusBadRequest, 400101, "Invalid Channel.")
+				return
+			}
 			q := location.Query()
 			q.Set("credentialId", credential.ID)
 			location.RawQuery = q.Encode()
@@ -79,7 +87,7 @@ func authenticationsHandler(store *Store) http.HandlerFunc {
 				"channelDescription": "IntegraICP - Simulated Broker",
 				"expireTimestamp":    expireTimestamp,
 				"executionStatus": map[string]any{
-					"currentStatus":      "PENDING_AUTHORIZATON",
+					"currentStatus":      "PENDING_AUTHORIZATON", //nolint:misspell // matches IntegraICP's official (misspelled) contract value, not a typo
 					"requestTimestamp":   nowISO(),
 					"executionTimestamp": nowISO(),
 				},
@@ -120,14 +128,7 @@ func credentialsHandler(store *Store) http.HandlerFunc {
 			return
 		}
 
-		identificationKey := "00000000000"
-		if credential.SubjectKey != nil {
-			identificationKey = *credential.SubjectKey
-		}
-		identificationType := "CPF"
-		if credential.SubjectType != nil {
-			identificationType = *credential.SubjectType
-		}
+		identificationKey, identificationType := subjectIdentification(credential)
 
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"data": map[string]any{
@@ -157,81 +158,96 @@ func isValidSha256Base64(value string) bool {
 
 func signaturesHandler(store *Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var body SignaturesBody
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !body.valid() {
-			sendError(w, http.StatusBadRequest, 400000, "Invalid request body.")
+		handleSignatures(store, w, r)
+	}
+}
+
+type signatureResult struct {
+	SignatureID        string  `json:"signatureId"`
+	ContentID          *string `json:"contentId,omitempty"`
+	ContentDigest      string  `json:"contentDigest"`
+	ContentDescription *string `json:"contentDescription,omitempty"`
+	SignedContent      string  `json:"signedContent"`
+	SignatureTimestamp string  `json:"signatureTimestamp"`
+}
+
+func handleSignatures(store *Store, w http.ResponseWriter, r *http.Request) {
+	var body SignaturesBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !body.valid() {
+		sendError(w, http.StatusBadRequest, 400000, "Invalid request body.")
+		return
+	}
+
+	credential, found, err := store.GetCredential(body.CredentialID)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, 500000, err.Error())
+		return
+	}
+	if !found {
+		sendError(w, http.StatusNotFound, 404000, "Credential Not Found")
+		return
+	}
+
+	if !VerifyPkce(body.SecretData, credential.CodeChallenge) {
+		sendError(w, http.StatusForbidden, 403201, "Invalid Verification Code (PKCE).")
+		return
+	}
+
+	for _, item := range body.Requests {
+		if !isValidSha256Base64(item.ContentDigest) {
+			sendError(w, http.StatusBadRequest, 400204, "Invalid Content Digest. Not SHA256 Base64 Encoded.")
 			return
 		}
+	}
 
-		credential, found, err := store.GetCredential(body.CredentialID)
-		if err != nil {
-			sendError(w, http.StatusInternalServerError, 500000, err.Error())
-			return
-		}
-		if !found {
-			sendError(w, http.StatusNotFound, 404000, "Credential Not Found")
-			return
-		}
+	signatures := buildSignatures(credential.ID, body.Requests)
+	identificationKey, identificationType := subjectIdentification(credential)
 
-		if !VerifyPkce(body.SecretData, credential.CodeChallenge) {
-			sendError(w, http.StatusForbidden, 403201, "Invalid Verification Code (PKCE).")
-			return
-		}
-
-		for _, item := range body.Requests {
-			if !isValidSha256Base64(item.ContentDigest) {
-				sendError(w, http.StatusBadRequest, 400204, "Invalid Content Digest. Not SHA256 Base64 Encoded.")
-				return
-			}
-		}
-
-		type signature struct {
-			SignatureID        string  `json:"signatureId"`
-			ContentID          *string `json:"contentId,omitempty"`
-			ContentDigest      string  `json:"contentDigest"`
-			ContentDescription *string `json:"contentDescription,omitempty"`
-			SignedContent      string  `json:"signedContent"`
-			SignatureTimestamp string  `json:"signatureTimestamp"`
-		}
-
-		signatures := make([]signature, 0, len(body.Requests))
-		for _, item := range body.Requests {
-			signatureID := uuid.NewString()
-			sum := sha256.Sum256([]byte(credential.ID + ":" + item.ContentDigest + ":" + signatureID))
-			signatures = append(signatures, signature{
-				SignatureID:        signatureID,
-				ContentID:          item.ContentID,
-				ContentDigest:      item.ContentDigest,
-				ContentDescription: item.ContentDescription,
-				SignedContent:      base64.StdEncoding.EncodeToString(sum[:]),
-				SignatureTimestamp: nowISO(),
-			})
-		}
-
-		identificationKey := "00000000000"
-		if credential.SubjectKey != nil {
-			identificationKey = *credential.SubjectKey
-		}
-		identificationType := "CPF"
-		if credential.SubjectType != nil {
-			identificationType = *credential.SubjectType
-		}
-
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{
-			"data": map[string]any{
-				"requestId": uuid.NewString(),
-				"executionStatus": map[string]any{
-					"currentStatus":      "COMPLETED_WITH_SUCCESS",
-					"requestTimestamp":   nowISO(),
-					"executionTimestamp": nowISO(),
-				},
-				"subjectIdentification": map[string]any{
-					"identificationKey":  identificationKey,
-					"identificationType": identificationType,
-				},
-				"certificateInformation": credential.Certificate,
-				"signatures":             signatures,
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
+		"data": map[string]any{
+			"requestId": uuid.NewString(),
+			"executionStatus": map[string]any{
+				"currentStatus":      "COMPLETED_WITH_SUCCESS",
+				"requestTimestamp":   nowISO(),
+				"executionTimestamp": nowISO(),
 			},
+			"subjectIdentification": map[string]any{
+				"identificationKey":  identificationKey,
+				"identificationType": identificationType,
+			},
+			"certificateInformation": credential.Certificate,
+			"signatures":             signatures,
+		},
+	})
+}
+
+func buildSignatures(credentialID string, requests []SignatureRequestItem) []signatureResult {
+	signatures := make([]signatureResult, 0, len(requests))
+	for _, item := range requests {
+		signatureID := uuid.NewString()
+		sum := sha256.Sum256([]byte(credentialID + ":" + item.ContentDigest + ":" + signatureID))
+		signatures = append(signatures, signatureResult{
+			SignatureID:        signatureID,
+			ContentID:          item.ContentID,
+			ContentDigest:      item.ContentDigest,
+			ContentDescription: item.ContentDescription,
+			SignedContent:      base64.StdEncoding.EncodeToString(sum[:]),
+			SignatureTimestamp: nowISO(),
 		})
 	}
+	return signatures
+}
+
+// subjectIdentification returns credential's subject key/type, falling back
+// to the same simulator defaults used by credentialsHandler.
+func subjectIdentification(credential *Credential) (key, kind string) {
+	key = "00000000000"
+	if credential.SubjectKey != nil {
+		key = *credential.SubjectKey
+	}
+	kind = "CPF"
+	if credential.SubjectType != nil {
+		kind = *credential.SubjectType
+	}
+	return key, kind
 }

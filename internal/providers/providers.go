@@ -25,35 +25,66 @@ func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sc
 	reg.Register(integraicp.New(db, faultStore))
 }
 
-// RegisterOpenAPI loads every spec found under specDir and/or matching
-// specGlobs, converts each into routes prefixed by its own slugified title
-// (or its x-mimic-name override) so specs can't collide with each other or
-// with hand-written providers, merges them into one route table per
-// conflictMode, and registers the result as a single "openapi" provider.
-// No-op if neither specDir nor specGlobs is set. Returns the number of
-// specs and merged routes loaded, for startup logging.
-//
-// persistDefault is the MIMIC_OPENAPI_PERSIST default applied to every
+// OpenAPIOptions configures RegisterOpenAPI's spec loading/merging.
+// PersistDefault is the MIMIC_OPENAPI_PERSIST default applied to every
 // spec's CRUD-shaped routes, unless a spec overrides it via x-mimic-persist.
+type OpenAPIOptions struct {
+	SpecDir        string
+	SpecGlobs      []string
+	ConflictMode   openapi.ConflictMode
+	PersistDefault bool
+}
+
+// RegisterOpenAPI loads every spec found under opts.SpecDir and/or matching
+// opts.SpecGlobs, converts each into routes prefixed by its own slugified
+// title (or its x-mimic-name override) so specs can't collide with each
+// other or with hand-written providers, merges them into one route table per
+// opts.ConflictMode, and registers the result as a single "openapi"
+// provider. No-op if neither SpecDir nor SpecGlobs is set. Returns the
+// number of specs and merged routes loaded, for startup logging.
 //
 // Like storage.RunMigrations, this must only be called once, at boot,
 // before the mux is built — parsing never happens per-request, only here.
-func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, specDir string, specGlobs []string, conflictMode openapi.ConflictMode, persistDefault bool, log *slog.Logger) (int, int, error) {
-	if specDir == "" && len(specGlobs) == 0 {
+func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, opts OpenAPIOptions, log *slog.Logger) (int, int, error) {
+	if opts.SpecDir == "" && len(opts.SpecGlobs) == 0 {
 		return 0, 0, nil
 	}
 
-	specs, err := openapi.LoadAll(specDir, specGlobs)
+	specs, err := openapi.LoadAll(opts.SpecDir, opts.SpecGlobs)
 	if err != nil {
 		return 0, 0, fmt.Errorf("load openapi specs: %w", err)
 	}
+	logSpecWarnings(log, specs)
 
+	specRoutes, metas, err := buildSpecRoutes(reg, specs, opts.PersistDefault)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	routes, err := openapi.Merge(specRoutes, opts.ConflictMode)
+	if err != nil {
+		return 0, 0, fmt.Errorf("merge openapi specs: %w", err)
+	}
+
+	if err := seedBehaviorFaults(faultStore, routes); err != nil {
+		return 0, 0, err
+	}
+
+	reg.Register(openapi.New("openapi", routes, faultStore, metas, db))
+	return len(specs), len(routes), nil
+}
+
+func logSpecWarnings(log *slog.Logger, specs []*openapi.LoadedSpec) {
 	for _, spec := range specs {
 		for _, w := range spec.Warnings {
 			log.Warn("openapi spec uses unsupported construct", "spec", spec.Path, "warning", w)
 		}
 	}
+}
 
+// buildSpecRoutes resolves each spec's route prefix (erroring on collision
+// with a hand-written provider or another spec) and builds its routes.
+func buildSpecRoutes(reg *registry.Registry, specs []*openapi.LoadedSpec, persistDefault bool) ([][]openapi.Route, []openapi.SpecMeta, error) {
 	reserved := make(map[string]string)
 	for _, p := range reg.All() {
 		reserved[p.Name] = p.Name
@@ -63,15 +94,10 @@ func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store
 	specRoutes := make([][]openapi.Route, 0, len(specs))
 	metas := make([]openapi.SpecMeta, 0, len(specs))
 	for _, spec := range specs {
-		prefix := specPrefix(spec)
-
-		if owner, ok := reserved[prefix]; ok {
-			return 0, 0, fmt.Errorf("openapi: spec %q resolves to prefix %q, which collides with provider %q — set x-mimic-name to disambiguate", spec.Path, prefix, owner)
+		prefix, err := resolveSpecPrefix(spec, reserved, seenPrefix)
+		if err != nil {
+			return nil, nil, err
 		}
-		if other, ok := seenPrefix[prefix]; ok {
-			return 0, 0, fmt.Errorf("openapi: prefix %q used by both %q and %q — set x-mimic-name to disambiguate", prefix, other, spec.Path)
-		}
-		seenPrefix[prefix] = spec.Path
 
 		persist := persistDefault
 		if spec.Persist != nil {
@@ -86,18 +112,22 @@ func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store
 			Checksum: spec.Checksum,
 		})
 	}
+	return specRoutes, metas, nil
+}
 
-	routes, err := openapi.Merge(specRoutes, conflictMode)
-	if err != nil {
-		return 0, 0, fmt.Errorf("merge openapi specs: %w", err)
+// resolveSpecPrefix computes spec's route prefix and records it in
+// seenPrefix, erroring if it collides with a reserved provider name or an
+// earlier spec's prefix.
+func resolveSpecPrefix(spec *openapi.LoadedSpec, reserved, seenPrefix map[string]string) (string, error) {
+	prefix := specPrefix(spec)
+	if owner, ok := reserved[prefix]; ok {
+		return "", fmt.Errorf("openapi: spec %q resolves to prefix %q, which collides with provider %q — set x-mimic-name to disambiguate", spec.Path, prefix, owner)
 	}
-
-	if err := seedBehaviorFaults(faultStore, routes); err != nil {
-		return 0, 0, err
+	if other, ok := seenPrefix[prefix]; ok {
+		return "", fmt.Errorf("openapi: prefix %q used by both %q and %q — set x-mimic-name to disambiguate", prefix, other, spec.Path)
 	}
-
-	reg.Register(openapi.New("openapi", routes, faultStore, metas, db))
-	return len(specs), len(routes), nil
+	seenPrefix[prefix] = spec.Path
+	return prefix, nil
 }
 
 // seedBehaviorFaults pre-populates fault_config with every route's

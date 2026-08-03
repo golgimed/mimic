@@ -105,25 +105,7 @@ var unsupportedConstructKeys = []string{"$ref", "oneOf", "allOf", "anyOf"}
 // key in unsupportedConstructKeys, returning the distinct ones found.
 func findUnsupportedConstructs(node any) []string {
 	found := make(map[string]bool)
-	var walk func(any)
-	walk = func(n any) {
-		switch v := n.(type) {
-		case map[string]any:
-			for _, key := range unsupportedConstructKeys {
-				if _, ok := v[key]; ok {
-					found[key] = true
-				}
-			}
-			for _, child := range v {
-				walk(child)
-			}
-		case []any:
-			for _, child := range v {
-				walk(child)
-			}
-		}
-	}
-	walk(node)
+	walkConstructs(node, found)
 
 	keys := make([]string, 0, len(found))
 	for _, k := range unsupportedConstructKeys {
@@ -134,6 +116,28 @@ func findUnsupportedConstructs(node any) []string {
 	return keys
 }
 
+func walkConstructs(n any, found map[string]bool) {
+	switch v := n.(type) {
+	case map[string]any:
+		recordUnsupportedKeys(v, found)
+		for _, child := range v {
+			walkConstructs(child, found)
+		}
+	case []any:
+		for _, child := range v {
+			walkConstructs(child, found)
+		}
+	}
+}
+
+func recordUnsupportedKeys(v map[string]any, found map[string]bool) {
+	for _, key := range unsupportedConstructKeys {
+		if _, ok := v[key]; ok {
+			found[key] = true
+		}
+	}
+}
+
 // Discover recursively finds spec files under dir (if set) and unions in
 // every path matching each pattern in globs (e.g. "specs/**/*.yaml"). Go's
 // filepath.Glob doesn't support "**", so a "**" segment is treated as
@@ -141,7 +145,6 @@ func findUnsupportedConstructs(node any) []string {
 func Discover(dir string, globs []string) ([]string, error) {
 	seen := make(map[string]bool)
 	var out []string
-
 	add := func(path string) {
 		if !seen[path] {
 			seen[path] = true
@@ -150,59 +153,84 @@ func Discover(dir string, globs []string) ([]string, error) {
 	}
 
 	if dir != "" {
-		err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-			if err != nil {
-				slog.Warn("openapi: skipping unreadable path during spec discovery", "path", path, "error", err)
-				return nil
-			}
-			if d.IsDir() {
-				return nil
-			}
-			ext := strings.ToLower(filepath.Ext(path))
-			if ext == ".yaml" || ext == ".yml" || ext == ".json" {
-				add(path)
-			}
-			return nil
-		})
+		found, err := discoverInDir(dir)
 		if err != nil {
-			return nil, fmt.Errorf("discover specs in %q: %w", dir, err)
+			return nil, err
+		}
+		for _, p := range found {
+			add(p)
 		}
 	}
 
 	for _, glob := range globs {
-		pattern := glob
-		root := "."
-		if idx := strings.Index(glob, "**"); idx >= 0 {
-			if idx > 0 {
-				root = strings.TrimSuffix(glob[:idx], "/")
-			}
-			pattern = strings.TrimPrefix(glob[idx:], "**/")
-
-			err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
-					return err
-				}
-				if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
-					add(path)
-				}
-				return nil
-			})
-			if err != nil {
-				return nil, fmt.Errorf("discover specs matching %q: %w", glob, err)
-			}
-			continue
-		}
-
-		matches, err := filepath.Glob(pattern)
+		found, err := discoverGlob(glob)
 		if err != nil {
-			return nil, fmt.Errorf("discover specs matching %q: %w", glob, err)
+			return nil, err
 		}
-		for _, m := range matches {
-			add(m)
+		for _, p := range found {
+			add(p)
 		}
 	}
 
 	sort.Strings(out)
+	return out, nil
+}
+
+// discoverInDir recursively finds .yaml/.yml/.json files under dir.
+func discoverInDir(dir string) ([]string, error) {
+	var out []string
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			slog.Warn("openapi: skipping unreadable path during spec discovery", "path", path, "error", err)
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".yaml" || ext == ".yml" || ext == ".json" {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discover specs in %q: %w", dir, err)
+	}
+	return out, nil
+}
+
+// discoverGlob resolves one glob pattern. A "**" segment means "search all
+// subdirectories from here down" (filepath.Glob doesn't support "**"
+// natively); anything else is a plain filepath.Glob pattern.
+func discoverGlob(glob string) ([]string, error) {
+	idx := strings.Index(glob, "**")
+	if idx < 0 {
+		matches, err := filepath.Glob(glob)
+		if err != nil {
+			return nil, fmt.Errorf("discover specs matching %q: %w", glob, err)
+		}
+		return matches, nil
+	}
+
+	root := "."
+	if idx > 0 {
+		root = strings.TrimSuffix(glob[:idx], "/")
+	}
+	pattern := strings.TrimPrefix(glob[idx:], "**/")
+
+	var out []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
+			out = append(out, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discover specs matching %q: %w", glob, err)
+	}
 	return out, nil
 }
 

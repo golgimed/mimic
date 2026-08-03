@@ -23,7 +23,7 @@ func LoadDotEnv(path string) error {
 		}
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -39,7 +39,7 @@ func LoadDotEnv(path string) error {
 		value = strings.TrimSpace(value)
 		value = strings.Trim(value, `"'`)
 		if _, exists := os.LookupEnv(key); !exists {
-			os.Setenv(key, value)
+			_ = os.Setenv(key, value)
 		}
 	}
 	return scanner.Err()

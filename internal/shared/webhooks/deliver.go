@@ -49,7 +49,7 @@ func ListDeliveries(db *sql.DB, provider, resourceID string) ([]registry.Webhook
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := []registry.WebhookDeliveryView{}
 	for rows.Next() {
@@ -111,7 +111,7 @@ func Deliver(ctx context.Context, db *sql.DB, input DeliverInput) error {
 			if res.StatusCode < 200 || res.StatusCode >= 300 {
 				status = "failed"
 			}
-			res.Body.Close()
+			_ = res.Body.Close()
 		}
 	} else {
 		status = "failed"

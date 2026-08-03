@@ -36,14 +36,14 @@ func newAppPersist(t *testing.T, specDir string, conflict openapi.ConflictMode, 
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	if err := storage.RunMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
 
 	reg := registry.New()
 	faultStore := admin.NewStore(db)
-	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, specDir, nil, conflict, persist, testLogger()); err != nil {
+	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{SpecDir: specDir, ConflictMode: conflict, PersistDefault: persist}, testLogger()); err != nil {
 		t.Fatalf("register openapi: %v", err)
 	}
 
@@ -59,7 +59,7 @@ func newRegistry(t *testing.T) (*registry.Registry, *sql.DB, *admin.Store) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	if err := storage.RunMigrations(db); err != nil {
 		t.Fatalf("run migrations: %v", err)
 	}
@@ -148,14 +148,14 @@ func TestFallsBackToEmptyObject(t *testing.T) {
 
 func TestUnknownSpecDirErrors(t *testing.T) {
 	reg, db, faultStore := newRegistry(t)
-	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, "does-not-exist", nil, openapi.ConflictStrict, false, testLogger()); err == nil {
+	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{SpecDir: "does-not-exist", ConflictMode: openapi.ConflictStrict}, testLogger()); err == nil {
 		t.Fatal("expected error for missing spec dir")
 	}
 }
 
 func TestDuplicatePrefixErrors(t *testing.T) {
 	reg, db, faultStore := newRegistry(t)
-	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, "fixtures/collisions/duplicate", nil, openapi.ConflictStrict, false, testLogger()); err == nil {
+	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{SpecDir: "fixtures/collisions/duplicate", ConflictMode: openapi.ConflictStrict}, testLogger()); err == nil {
 		t.Fatal("expected error for duplicate spec prefixes")
 	}
 }
@@ -164,7 +164,7 @@ func TestReservedNamePrefixErrors(t *testing.T) {
 	reg, db, faultStore := newRegistry(t)
 	reg.Register(&registry.Provider{Name: "petstore-example", Register: func(*http.ServeMux) {}})
 
-	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, "testdata", nil, openapi.ConflictStrict, false, testLogger()); err == nil {
+	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{SpecDir: "testdata", ConflictMode: openapi.ConflictStrict}, testLogger()); err == nil {
 		t.Fatal("expected error for spec prefix colliding with an existing provider")
 	}
 }
@@ -180,7 +180,7 @@ func TestMimicNameOverridesPrefix(t *testing.T) {
 
 func TestListItemsAndGetItemDetail(t *testing.T) {
 	reg, db, faultStore := newRegistry(t)
-	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, "testdata", nil, openapi.ConflictStrict, false, testLogger()); err != nil {
+	if _, _, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{SpecDir: "testdata", ConflictMode: openapi.ConflictStrict}, testLogger()); err != nil {
 		t.Fatalf("register openapi: %v", err)
 	}
 
@@ -283,7 +283,7 @@ func TestPersistedUpdateAndDelete(t *testing.T) {
 
 	created := doBody(t, h, "POST", "/crud-example/widgets", map[string]any{"name": "A"})
 	var body map[string]any
-	json.Unmarshal(created.Body.Bytes(), &body)
+	_ = json.Unmarshal(created.Body.Bytes(), &body)
 	id := body["id"].(string)
 
 	updated := doBody(t, h, "PUT", "/crud-example/widgets/"+id, map[string]any{"name": "B"})
@@ -291,7 +291,7 @@ func TestPersistedUpdateAndDelete(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", updated.Code, updated.Body.String())
 	}
 	var updatedBody map[string]any
-	json.Unmarshal(updated.Body.Bytes(), &updatedBody)
+	_ = json.Unmarshal(updated.Body.Bytes(), &updatedBody)
 	if updatedBody["name"] != "B" {
 		t.Errorf("expected updated name, got %v", updatedBody["name"])
 	}
@@ -324,7 +324,7 @@ func TestMimicPersistOverridesGlobalDefault(t *testing.T) {
 
 	created := doBody(t, h, "POST", "/crud-persist-true/widgets", map[string]any{"name": "A"})
 	var body map[string]any
-	json.Unmarshal(created.Body.Bytes(), &body)
+	_ = json.Unmarshal(created.Body.Bytes(), &body)
 	id := body["id"].(string)
 
 	rec := do(t, h, "GET", "/crud-persist-true/widgets/"+id)

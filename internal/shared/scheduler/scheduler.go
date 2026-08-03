@@ -49,64 +49,74 @@ type jobRow struct {
 	payloadJSON string
 }
 
+type due struct {
+	jobRow
+	kind string
+}
+
 // Tick selects every due pending job and dispatches it to its registered
 // handler, marking it processing -> done/failed. Matches the JobFn signature
 // expected by lane's runners.SchedulerRunner.
 func (s *Scheduler) Tick(ctx context.Context) error {
+	jobs, err := s.fetchDueJobs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, j := range jobs {
+		s.processJob(ctx, j)
+	}
+	return nil
+}
+
+func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT id, kind, payload_json FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
 		now,
 	)
 	if err != nil {
-		return fmt.Errorf("query due jobs: %w", err)
+		return nil, fmt.Errorf("query due jobs: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 
-	type due struct {
-		jobRow
-		kind string
-	}
 	var jobs []due
 	for rows.Next() {
 		var j due
 		if err := rows.Scan(&j.id, &j.kind, &j.payloadJSON); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		jobs = append(jobs, j)
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	rows.Close()
+	return jobs, rows.Err()
+}
 
-	for _, j := range jobs {
-		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'processing' WHERE id = ?", j.id); err != nil {
-			slog.Error("scheduler: failed to mark job processing", "job_id", j.id, "kind", j.kind, "error", err)
-			continue
-		}
-
-		s.mu.RLock()
-		handler, ok := s.handlers[j.kind]
-		s.mu.RUnlock()
-
-		var handlerErr error
-		if ok {
-			handlerErr = handler(ctx, json.RawMessage(j.payloadJSON))
-		}
-
-		if handlerErr != nil {
-			if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id); err != nil {
-				slog.Error("scheduler: failed to mark job failed", "job_id", j.id, "kind", j.kind, "handler_error", handlerErr, "error", err)
-			} else {
-				slog.Error("scheduler: job handler failed", "job_id", j.id, "kind", j.kind, "error", handlerErr)
-			}
-			continue
-		}
-		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'done' WHERE id = ?", j.id); err != nil {
-			slog.Error("scheduler: failed to mark job done", "job_id", j.id, "kind", j.kind, "error", err)
-		}
+// processJob marks j processing, dispatches it to its registered handler (if
+// any), and marks it done/failed. Errors are logged, not returned — one
+// job's failure never stops Tick from processing the rest.
+func (s *Scheduler) processJob(ctx context.Context, j due) {
+	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'processing' WHERE id = ?", j.id); err != nil {
+		slog.Error("scheduler: failed to mark job processing", "job_id", j.id, "kind", j.kind, "error", err)
+		return
 	}
 
-	return nil
+	s.mu.RLock()
+	handler, ok := s.handlers[j.kind]
+	s.mu.RUnlock()
+
+	var handlerErr error
+	if ok {
+		handlerErr = handler(ctx, json.RawMessage(j.payloadJSON))
+	}
+
+	if handlerErr != nil {
+		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id); err != nil {
+			slog.Error("scheduler: failed to mark job failed", "job_id", j.id, "kind", j.kind, "handler_error", handlerErr, "error", err)
+		} else {
+			slog.Error("scheduler: job handler failed", "job_id", j.id, "kind", j.kind, "error", handlerErr)
+		}
+		return
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'done' WHERE id = ?", j.id); err != nil {
+		slog.Error("scheduler: failed to mark job done", "job_id", j.id, "kind", j.kind, "error", err)
+	}
 }

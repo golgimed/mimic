@@ -69,30 +69,44 @@ Future providers should be added incrementally.
 Keep the architecture simple.
 
 ```
-src/
+cmd/mimic/
+    main.go            # entrypoint: wires storage, providers, admin, hands lifecycle to Lane
+
+internal/
+    registry/
+        registry.go     # Provider type + in-memory registry (dependency-free)
     core/
-        server.ts       # Fastify bootstrap, registers enabled providers
-        registry.ts      # provider registry
+        mux.go           # builds the root http.ServeMux, CORS, /health, /dashboard
+    openapi/
+        loader.go        # parses OpenAPI 3.x specs from specs/
+        provider.go      # turns parsed specs into a registry.Provider
     providers/
-        index.ts         # registers every known provider
+        providers.go     # registers every known provider
         integraicp/
             README.md
-            provider.ts   # Provider: { name, register(app), listItems?, getItemDetail? }
+            provider.go   # Provider{Name, Register(mux), ListItems, GetItemDetail}
         zenvia/
             README.md
-            provider.ts
+            provider.go
     shared/
         auth/
+        faults/
+        behavior/         # probability + latency-distribution primitives
+        httpx/             # shared JSON response helpers
         scheduler/
         storage/
         webhooks/
         admin/
-    server.ts             # CLI entrypoint
+    config/                # env/.env loading
+
+db/migrations/           # embedded (go:embed) SQL migrations
+dashboard/                # embedded (go:embed) static dashboard HTML
+specs/                    # user-dropped OpenAPI specs, served by internal/openapi
 ```
 
-Providers own their own routes, handlers, state, and README. The core (`src/core/`) knows nothing about provider business rules — it only starts Fastify, loads config, registers enabled providers via the registry, and exposes shared infrastructure.
+Providers own their own routes, handlers, state, and README. `internal/core` knows nothing about provider business rules — it only builds the HTTP mux, loads config, registers enabled providers via the registry, and exposes shared infrastructure.
 
-Adding a provider means creating `src/providers/<name>/` and registering it in `src/providers/index.ts` — no other file should need to change.
+Adding a provider means creating `internal/providers/<name>/` and registering it in `internal/providers/providers.go` — no other file should need to change.
 
 Shared components should only exist when reused by at least two providers.
 
@@ -100,16 +114,13 @@ Shared components should only exist when reused by at least two providers.
 
 # Technology Stack
 
-- TypeScript
-- Node.js 22+
-- Fastify
-- Zod
-- SQLite (better-sqlite3)
+- Go 1.26+
+- `net/http` `ServeMux` (Go 1.22+ method+pattern routing) — no router framework
+- [Lane](https://github.com/rluders/lane) — startup/health/graceful-shutdown/scheduler lifecycle orchestration
+- SQLite (`modernc.org/sqlite`, pure Go, no cgo) via `database/sql`
 - Docker
 
-Avoid frameworks unless they significantly simplify development.
-
-Always use context7
+Avoid frameworks unless they significantly simplify development. Prefer the standard library; keep third-party dependencies minimal.
 
 ---
 

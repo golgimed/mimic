@@ -1,5 +1,5 @@
-node_modules/
-dist/
+/mimic
+/bin/
 db/*.sqlite
 db/*.sqlite-*
 *.log

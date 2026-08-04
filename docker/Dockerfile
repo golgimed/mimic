@@ -1,19 +1,16 @@
-FROM node:22-slim AS build
+FROM golang:1.26-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o /mimic ./cmd/mimic
+RUN mkdir -p /data
 
-FROM node:22-slim
-WORKDIR /app
-ENV NODE_ENV=production
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-COPY --from=build /app/dist ./dist
-COPY db/migrations ./db/migrations
-COPY dashboard ./dashboard
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35
+COPY --from=build /mimic /mimic
+COPY --from=build --chown=nonroot:nonroot /data /data
 
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+USER nonroot:nonroot
+ENTRYPOINT ["/mimic"]

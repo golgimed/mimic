@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: Example Pet Store
+  version: 1.0.0
+  description: >
+    A minimal CRUD-shaped spec, mounted at /example-pet-store by default.
+    Copy this file's structure for your own specs — drop them in this
+    directory and Mimic mounts them automatically on `serve`.
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      responses:
+        "200":
+          description: A list of pets
+          content:
+            application/json:
+              example:
+                - id: "1"
+                  name: "Rex"
+                  species: "dog"
+    post:
+      operationId: createPet
+      summary: Create a pet
+      responses:
+        "201":
+          description: Created pet, generated from schema
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  species:
+                    type: string
+  /pets/{id}:
+    get:
+      operationId: getPet
+      summary: Get a pet by id
+      responses:
+        "200":
+          description: The requested pet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  species:
+                    type: string
+        "404":
+          description: Pet not found
+    put:
+      operationId: updatePet
+      summary: Replace a pet
+      responses:
+        "200":
+          description: Updated pet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  species:
+                    type: string
+    delete:
+      operationId: deletePet
+      summary: Delete a pet
+      responses:
+        "204":
+          description: Deleted

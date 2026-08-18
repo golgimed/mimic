@@ -52,6 +52,7 @@ Current providers:
 |-----------|---------|------------------------|
 | IntegraICP | Digital Signature | https://developers.integraicp.com.br/api-reference/icp/v3/index.html |
 | Zenvia | SMS, WhatsApp, Email | https://zenvia.github.io/zenvia-openapi-spec/v2/ |
+| SNCR | ANVISA controlled-prescription numbering allocation | ANVISA Manual da API SNCR (1ª ed.) + Instruções de Integração v1.0 — see `internal/providers/sncr/README.md` |
 
 Future providers should be added incrementally.
 

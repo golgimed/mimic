@@ -7,6 +7,12 @@ linters:
     - errorlint
     - copyloopvar
     - misspell
+  settings:
+    misspell:
+      # Portuguese API route and payload terms, intentionally kept to match Bry SCAD.
+      ignore-rules:
+        - participantes
+        - protocolos
   exclusions:
     generated: strict
 

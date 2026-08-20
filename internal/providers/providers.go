@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/openapi"
+	"github.com/golgimed/mimic/internal/providers/bryscad"
 	"github.com/golgimed/mimic/internal/providers/integraicp"
+	"github.com/golgimed/mimic/internal/providers/sncr"
 	"github.com/golgimed/mimic/internal/providers/zenvia"
 	"github.com/golgimed/mimic/internal/registry"
 	"github.com/golgimed/mimic/internal/shared/admin"
@@ -23,6 +25,8 @@ import (
 func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sched *scheduler.Scheduler, zenviaStatusDelay time.Duration) {
 	reg.Register(zenvia.New(db, faultStore, sched, zenviaStatusDelay))
 	reg.Register(integraicp.New(db, faultStore))
+	reg.Register(sncr.New(db, faultStore))
+	reg.Register(bryscad.New(db, faultStore))
 }
 
 // OpenAPIOptions configures RegisterOpenAPI's spec loading/merging.

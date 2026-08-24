@@ -71,6 +71,14 @@ internal/
             README.md
             provider.go
             ...
+        sncr/
+            README.md
+            provider.go
+            ...
+        bryscad/
+            README.md
+            provider.go
+            ...
 
     shared/
         auth/              # reused by 2+ providers
@@ -113,6 +121,8 @@ type Provider struct {
 
 - **[Zenvia](internal/providers/zenvia/README.md)** — SMS, WhatsApp, and Email messaging, with subscription-based delivery-status webhooks.
 - **[IntegraICP](internal/providers/integraicp/README.md)** — Brazilian digital signature / ICP-Brasil certificate flows.
+- **[SNCR](internal/providers/sncr/README.md)** — ANVISA's controlled-prescription numbering allocation service.
+- **[BRy SCAD](internal/providers/bryscad/README.md)** — BRy SCAD digital signature collections (all 54 operations of BRy SCAD API REST v1).
 - **[OpenAPI adapter](specs/README.md)** — drop any OpenAPI 3.x spec into `specs/` and Mimic serves it as a mock provider (route prefix derived from the spec title, optional CRUD persistence), no hand-written code required.
 
 See each provider's README for endpoint-level usage and known limitations.

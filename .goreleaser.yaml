@@ -65,6 +65,5 @@ release:
   draft: false
   prerelease: auto
   replace_existing_artifacts: true
-  replace_existing_release: false
   footer: |
     **Full Changelog**: https://github.com/golgimed/mimic/compare/{{ .PreviousTag }}...{{ .Tag }}

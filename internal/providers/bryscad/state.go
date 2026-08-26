@@ -2,8 +2,10 @@ package bryscad
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -76,6 +78,80 @@ func (s *Store) TransitionCollection(chave, situacao string) (*Collection, error
 	}
 	count, err := result.RowsAffected()
 	if err != nil || count == 0 {
+		return nil, err
+	}
+	return s.GetCollection(chave)
+}
+
+// CompleteCollection simulates every signing participant concluding the
+// collection: it stamps each "assinante" participant's situacaoAssinatura as
+// CONCLUIDO (read back by GET .../participantes), appends a matching
+// "Assinatura" entry per participant (read back by GET .../historico), and
+// fabricates one signed-document record per submitted document (read back by
+// GET .../documentos-assinados) — the three authenticated re-fetches
+// golgimed's BRy adapter relies on instead of trusting the webhook body
+// (ParseWebhook's SECURITY note). Reviewer-only participants (assinante ==
+// false) are left untouched, matching the real provider's distinction.
+func (s *Store) CompleteCollection(chave string) (*Collection, error) {
+	c, err := s.GetCollection(chave)
+	if err != nil || c == nil {
+		return c, err
+	}
+
+	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+
+	participants, _ := c.Payload["participantes"].([]any)
+	historico := make([]map[string]any, 0, len(participants))
+	for _, raw := range participants {
+		p, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		assinante, _ := p["assinante"].(bool)
+		if !assinante {
+			continue
+		}
+		p["situacaoAssinatura"] = map[string]any{"chave": "CONCLUIDO", "descricao": "CONCLUIDO"}
+		historico = append(historico, map[string]any{
+			"nome":         p["nome"],
+			"codigo":       p["codigo"],
+			"processo":     "Assinatura",
+			"dataExecucao": now,
+		})
+	}
+	c.Payload["participantes"] = participants
+	c.Payload["_historico"] = historico
+
+	documentos, _ := c.Payload["documentos"].([]any)
+	assinados := make([]map[string]any, 0, len(documentos))
+	for _, raw := range documentos {
+		d, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		nome, _ := d["nome"].(string)
+		size := 0
+		if b64, ok := d["base64"].(string); ok {
+			if decoded, err := base64.StdEncoding.DecodeString(b64); err == nil {
+				size = len(decoded)
+			}
+		}
+		assinados = append(assinados, map[string]any{
+			"nome":           nome,
+			"chaveDocumento": uuid.NewString(),
+			"tamanho":        size,
+		})
+	}
+	c.Payload["_documentosAssinados"] = assinados
+
+	payloadJSON, err := json.Marshal(c.Payload)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.Exec(
+		`UPDATE bry_scad_collections SET payload_json = ?, situacao = 'CONCLUIDO', updated_at = datetime('now') WHERE chave = ?`,
+		string(payloadJSON), chave,
+	); err != nil {
 		return nil, err
 	}
 	return s.GetCollection(chave)

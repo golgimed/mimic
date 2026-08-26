@@ -22,11 +22,11 @@ import (
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 )
 
-func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sched *scheduler.Scheduler, zenviaStatusDelay time.Duration) {
+func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sched *scheduler.Scheduler, zenviaStatusDelay time.Duration, bryScadWebhookURL string) {
 	reg.Register(zenvia.New(db, faultStore, sched, zenviaStatusDelay))
 	reg.Register(integraicp.New(db, faultStore))
 	reg.Register(sncr.New(db, faultStore))
-	reg.Register(bryscad.New(db, faultStore))
+	reg.Register(bryscad.New(db, faultStore, bryScadWebhookURL))
 }
 
 // OpenAPIOptions configures RegisterOpenAPI's spec loading/merging.

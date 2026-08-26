@@ -8,11 +8,11 @@ import (
 	"github.com/golgimed/mimic/internal/shared/admin"
 )
 
-func New(db *sql.DB, faultStore *admin.Store) *registry.Provider {
+func New(db *sql.DB, faultStore *admin.Store, webhookURL string) *registry.Provider {
 	store := NewStore(db)
 	return &registry.Provider{
 		Name:     Name,
-		Register: func(mux *http.ServeMux) { registerRoutes(mux, store, faultStore) },
+		Register: func(mux *http.ServeMux) { registerRoutes(mux, store, faultStore, db, webhookURL) },
 		ListItems: func() []registry.DashboardItem {
 			collections, err := store.ListCollections()
 			if err != nil {

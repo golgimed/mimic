@@ -99,6 +99,11 @@ type Config struct {
 	DefaultDelay      time.Duration
 	ZenviaStatusDelay time.Duration
 	OpenAPIPersist    bool
+	// BryScadWebhookURL is where the bry-scad provider's Mimic-only /concluir
+	// test helper calls back after simulating collection completion, mirroring
+	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
+	// POST /v1/webhooks/signatures/bry). Empty disables the callback.
+	BryScadWebhookURL string
 	// EnabledProviders filters which registered providers are served, per
 	// MIMIC_PROVIDERS (comma-separated). Empty means "all enabled."
 	EnabledProviders []string
@@ -139,6 +144,7 @@ func Load() (Config, error) {
 		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
 		OpenAPIPersist:    openAPIPersist,
 		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
+		BryScadWebhookURL: getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
 	}, nil
 }
 

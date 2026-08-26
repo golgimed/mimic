@@ -1,6 +1,7 @@
 package bryscad
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 
@@ -32,7 +33,7 @@ func requireBearer(next http.Handler) http.Handler {
 	})
 }
 
-func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store) {
+func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, db *sql.DB, webhookURL string) {
 	// Webhooks (v1 and v2).
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/method", webhookMethodsHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/user-data", collectionHandler())
@@ -80,16 +81,18 @@ func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store) {
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas", listCollectionsHandler(store))
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/pendencias", collectionHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}", getCollectionHandler(store))
-	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/historico", collectionHandler())
-	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/participantes", collectionHandler())
+	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/historico", historyListHandler(store))
+	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/participantes", participantsListHandler(store))
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/grupos/{id}", collectionHandler())
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/estender-data-limite", successHandler())
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/reenviar-email", successHandler())
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/cancelar", transitionCollectionHandler(store, "CANCELADO"))
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/rejeitar", transitionCollectionHandler(store, "REJEITADA"))
+	// Mimic-only test helper — see completeCollectionHandler doc comment.
+	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/concluir", completeCollectionHandler(store, db, webhookURL))
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/documentos", collectionHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/documento/{chave}", downloadHandler())
-	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/documentos-assinados", collectionHandler())
+	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/documentos-assinados", signedDocumentsListHandler(store))
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/documento/assinado/{chave}", downloadHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/documentos/{chave}/protocolos", downloadHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/documentos/{chave}/assinaturas", downloadHandler())

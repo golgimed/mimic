@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/openapi"
+	"github.com/golgimed/mimic/internal/providers/brymedical"
 	"github.com/golgimed/mimic/internal/providers/bryscad"
 	"github.com/golgimed/mimic/internal/providers/integraicp"
 	"github.com/golgimed/mimic/internal/providers/sncr"
@@ -27,6 +28,7 @@ func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sc
 	reg.Register(integraicp.New(db, faultStore))
 	reg.Register(sncr.New(db, faultStore))
 	reg.Register(bryscad.New(db, faultStore, bryScadWebhookURL))
+	reg.Register(brymedical.New(db, faultStore))
 }
 
 // OpenAPIOptions configures RegisterOpenAPI's spec loading/merging.

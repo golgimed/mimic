@@ -6,8 +6,6 @@ import (
 	"github.com/golgimed/mimic/internal/testutil"
 )
 
-var bearer = map[string]string{"Authorization": "Bearer test-token"}
-
 func preAuthHeaders() map[string]string {
 	return map[string]string{
 		"Authorization":       "Bearer test-token",

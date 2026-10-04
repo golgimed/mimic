@@ -104,6 +104,11 @@ type Config struct {
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
 	// POST /v1/webhooks/signatures/bry). Empty disables the callback.
 	BryScadWebhookURL string
+	// CRMDoctors lists the physicians the crm provider knows, per
+	// MIMIC_CRM_DOCTORS ("UF:CRM:Nome", comma-separated). CRMAccessKey is the
+	// 8-char chave de identificação it accepts (MIMIC_CRM_ACCESS_KEY).
+	CRMDoctors   []string
+	CRMAccessKey string
 	// EnabledProviders filters which registered providers are served, per
 	// MIMIC_PROVIDERS (comma-separated). Empty means "all enabled."
 	EnabledProviders []string
@@ -135,6 +140,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	crmDoctors := getEnvList("MIMIC_CRM_DOCTORS")
+	if crmDoctors == nil {
+		crmDoctors = []string{"SP:98765:Ana Costa"}
+	}
+
 	return Config{
 		Port:              port,
 		LogLevel:          logLevel,
@@ -144,6 +154,8 @@ func Load() (Config, error) {
 		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
 		OpenAPIPersist:    openAPIPersist,
 		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
+		CRMDoctors:        crmDoctors,
+		CRMAccessKey:      getEnv("MIMIC_CRM_ACCESS_KEY", "mimiccrm"),
 		BryScadWebhookURL: getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
 	}, nil
 }

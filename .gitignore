@@ -4,3 +4,4 @@ db/*.sqlite
 db/*.sqlite-*
 *.log
 .env
+graft/.cache/

@@ -63,7 +63,7 @@ func New(t *testing.T, zenviaStatusDelay time.Duration) *App {
 	// bry-scad completion webhook is unused by in-process Go tests today — the
 	// real-Mimic BRy loop is exercised against a running container instead
 	// (golgimed's *_mimic_e2e_test.go, gated on MIMIC_BASE_URL).
-	providers.RegisterAll(reg, db, faultStore, sched, zenviaStatusDelay, "", crm.DefaultAccessKey, []string{crm.DefaultDoctor})
+	providers.RegisterAll(reg, db, faultStore, sched, zenviaStatusDelay, "", crm.DefaultAccessKey, nil)
 
 	health := &lane.HealthState{}
 	health.SetReady(true)

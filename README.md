@@ -123,10 +123,15 @@ type Provider struct {
 - **[IntegraICP](internal/providers/integraicp/README.md)** — Brazilian digital signature / ICP-Brasil certificate flows.
 - **[SNCR](internal/providers/sncr/README.md)** — ANVISA's controlled-prescription numbering allocation service.
 - **[BRy SCAD](internal/providers/bryscad/README.md)** — BRy SCAD digital signature collections (all 54 operations of BRy SCAD API REST v1).
-- **[CRM](internal/providers/crm/README.md)** — CFM Consulta Médicos SOAP web service (operation Consultar), dev-only physician allow-list.
+- **[CRM](internal/providers/crm/README.md)** — CFM Consulta Médicos SOAP web service (operations Consultar and Validar, official WSDL), with fixtures for regular and non-regular registrations.
 - **[OpenAPI adapter](specs/README.md)** — drop any OpenAPI 3.x spec into `specs/` and Mimic serves it as a mock provider (route prefix derived from the spec title, optional CRUD persistence), no hand-written code required.
 
 See each provider's README for endpoint-level usage and known limitations.
+
+**Not simulated (no official contract):** CFO/CRO (dentists), CFF/CRF (pharmacists) and CFMV/CRMV
+(veterinarians) publish no documented machine-to-machine registration lookup. Their public lookups are web UIs
+(CFO and CFMV behind reCAPTCHA), and CFF's WSCFF is login-only with no public documentation. They will be added
+only once an official contract is available.
 
 ## Requirements
 

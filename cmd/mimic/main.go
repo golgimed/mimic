@@ -165,7 +165,7 @@ func run(oa openAPIFlags) {
 	reg := registry.New()
 	faultStore := admin.NewStore(db)
 	sched := scheduler.New(db)
-	providers.RegisterAll(reg, db, faultStore, sched, cfg.ZenviaStatusDelay, cfg.BryScadWebhookURL, cfg.CRMAllowedLicenses)
+	providers.RegisterAll(reg, db, faultStore, sched, cfg.ZenviaStatusDelay, cfg.BryScadWebhookURL, cfg.CRMAccessKey, cfg.CRMDoctors)
 
 	specDir := discoverSpecDir(oa)
 	registerOpenAPIIfConfigured(reg, db, faultStore, oa, specDir, cfg, log)

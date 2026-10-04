@@ -104,9 +104,11 @@ type Config struct {
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
 	// POST /v1/webhooks/signatures/bry). Empty disables the callback.
 	BryScadWebhookURL string
-	// CRMAllowedLicenses lists license numbers the crm provider answers 200
-	// for, per MIMIC_CRM_ALLOWED_LICENSES (comma-separated).
-	CRMAllowedLicenses []string
+	// CRMDoctors lists the physicians the crm provider knows, per
+	// MIMIC_CRM_DOCTORS ("UF:CRM:Nome", comma-separated). CRMAccessKey is the
+	// 8-char chave de identificação it accepts (MIMIC_CRM_ACCESS_KEY).
+	CRMDoctors   []string
+	CRMAccessKey string
 	// EnabledProviders filters which registered providers are served, per
 	// MIMIC_PROVIDERS (comma-separated). Empty means "all enabled."
 	EnabledProviders []string
@@ -138,22 +140,23 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
-	crmAllowed := getEnvList("MIMIC_CRM_ALLOWED_LICENSES")
-	if crmAllowed == nil {
-		crmAllowed = []string{"CRM-SP 98765"}
+	crmDoctors := getEnvList("MIMIC_CRM_DOCTORS")
+	if crmDoctors == nil {
+		crmDoctors = []string{"SP:98765:Ana Costa"}
 	}
 
 	return Config{
-		Port:               port,
-		LogLevel:           logLevel,
-		SchedulerInterval:  time.Duration(schedulerIntervalMS) * time.Millisecond,
-		DBPath:             getEnv("DB_PATH", "db/simulator.sqlite"),
-		DefaultDelay:       time.Duration(defaultDelayMS) * time.Millisecond,
-		ZenviaStatusDelay:  time.Duration(zenviaStatusDelayMS) * time.Millisecond,
-		OpenAPIPersist:     openAPIPersist,
-		EnabledProviders:   getEnvList("MIMIC_PROVIDERS"),
-		CRMAllowedLicenses: crmAllowed,
-		BryScadWebhookURL:  getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
+		Port:              port,
+		LogLevel:          logLevel,
+		SchedulerInterval: time.Duration(schedulerIntervalMS) * time.Millisecond,
+		DBPath:            getEnv("DB_PATH", "db/simulator.sqlite"),
+		DefaultDelay:      time.Duration(defaultDelayMS) * time.Millisecond,
+		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
+		OpenAPIPersist:    openAPIPersist,
+		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
+		CRMDoctors:        crmDoctors,
+		CRMAccessKey:      getEnv("MIMIC_CRM_ACCESS_KEY", "mimiccrm"),
+		BryScadWebhookURL: getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
 	}, nil
 }
 

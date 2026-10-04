@@ -1,0 +1,306 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://servico.cfm.org.br/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns1="http://schemas.xmlsoap.org/soap/http" name="ServicoConsultaMedicosService" targetNamespace="http://servico.cfm.org.br/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://servico.cfm.org.br/" attributeFormDefault="unqualified" elementFormDefault="unqualified" targetNamespace="http://servico.cfm.org.br/">
+  <xs:element name="ConsultaCompleta" type="tns:ConsultaCompleta"/>
+  <xs:element name="ConsultaCompletaResponse" type="tns:ConsultaCompletaResponse"/>
+  <xs:element name="Consultar" type="tns:Consultar"/>
+  <xs:element name="ConsultarResponse" type="tns:ConsultarResponse"/>
+  <xs:element name="Validar" type="tns:Validar"/>
+  <xs:element name="ValidarResponse" type="tns:ValidarResponse"/>
+  <xs:element name="buscarImagem" type="tns:buscarImagem"/>
+  <xs:element name="buscarImagemResponse" type="tns:buscarImagemResponse"/>
+  <xs:element name="destroy" type="tns:destroy"/>
+  <xs:element name="destroyResponse" type="tns:destroyResponse"/>
+  <xs:element name="init" type="tns:init"/>
+  <xs:element name="initResponse" type="tns:initResponse"/>
+  <xs:element name="logCounters" type="tns:logCounters"/>
+  <xs:element name="logCountersResponse" type="tns:logCountersResponse"/>
+  <xs:complexType name="init">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="initResponse">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="logCounters">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="logCountersResponse">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="ConsultaCompleta">
+    <xs:sequence>
+      <xs:element name="crm" type="xs:int"/>
+      <xs:element minOccurs="0" name="uf" type="xs:string"/>
+      <xs:element minOccurs="0" name="cpf" type="xs:string"/>
+      <xs:element minOccurs="0" name="dataNascimento" type="xs:string"/>
+      <xs:element minOccurs="0" name="chave" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="ConsultaCompletaResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="dadosMedico" type="tns:medicoVO"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="medicoVO">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="codigoErro" type="xs:string"/>
+      <xs:element minOccurs="0" name="crm" type="xs:string"/>
+      <xs:element minOccurs="0" name="dataAtualizacao" type="xs:string"/>
+      <xs:element minOccurs="0" name="dataNascimento" type="xs:string"/>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="especialidade" nillable="true" type="xs:string"/>
+      <xs:element minOccurs="0" name="imagem" type="xs:base64Binary"/>
+      <xs:element minOccurs="0" name="nome" type="xs:string"/>
+      <xs:element minOccurs="0" name="numeroCPF" type="xs:string"/>
+      <xs:element minOccurs="0" name="situacao" type="xs:string"/>
+      <xs:element minOccurs="0" name="tipoInscricao" type="xs:string"/>
+      <xs:element minOccurs="0" name="uf" type="xs:string"/>
+      <xs:element minOccurs="0" name="verificarAutoriazacao" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="Consultar">
+    <xs:sequence>
+      <xs:element name="crm" type="xs:int"/>
+      <xs:element minOccurs="0" name="uf" type="xs:string"/>
+      <xs:element minOccurs="0" name="chave" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="ConsultarResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="dadosMedico" type="tns:medicoVO"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="buscarImagem">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="cpf" type="xs:string"/>
+      <xs:element minOccurs="0" name="chave" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="buscarImagemResponse">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="resultadoImagem" type="tns:medicoVO"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="destroy">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="destroyResponse">
+    <xs:sequence/>
+  </xs:complexType>
+  <xs:complexType name="Validar">
+    <xs:sequence>
+      <xs:element name="crm" type="xs:int"/>
+      <xs:element minOccurs="0" name="uf" type="xs:string"/>
+      <xs:element minOccurs="0" name="cpf" type="xs:string"/>
+      <xs:element minOccurs="0" name="dataNascimento" type="xs:string"/>
+      <xs:element minOccurs="0" name="chave" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="ValidarResponse">
+    <xs:sequence>
+      <xs:element name="resultadoConsulta" type="xs:boolean"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="Exception" type="tns:Exception"/>
+  <xs:complexType name="Exception">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="ConsultaCompletaResponse">
+    <wsdl:part element="tns:ConsultaCompletaResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="init">
+    <wsdl:part element="tns:init" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Consultar">
+    <wsdl:part element="tns:Consultar" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="initResponse">
+    <wsdl:part element="tns:initResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="destroy">
+    <wsdl:part element="tns:destroy" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Validar">
+    <wsdl:part element="tns:Validar" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="logCountersResponse">
+    <wsdl:part element="tns:logCountersResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Exception">
+    <wsdl:part element="tns:Exception" name="Exception">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="ConsultarResponse">
+    <wsdl:part element="tns:ConsultarResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="destroyResponse">
+    <wsdl:part element="tns:destroyResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="logCounters">
+    <wsdl:part element="tns:logCounters" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="ConsultaCompleta">
+    <wsdl:part element="tns:ConsultaCompleta" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="buscarImagem">
+    <wsdl:part element="tns:buscarImagem" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="buscarImagemResponse">
+    <wsdl:part element="tns:buscarImagemResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="ValidarResponse">
+    <wsdl:part element="tns:ValidarResponse" name="parameters">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="ServicoConsultaMedicos">
+    <wsdl:operation name="init">
+      <wsdl:input message="tns:init" name="init">
+    </wsdl:input>
+      <wsdl:output message="tns:initResponse" name="initResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="logCounters">
+      <wsdl:input message="tns:logCounters" name="logCounters">
+    </wsdl:input>
+      <wsdl:output message="tns:logCountersResponse" name="logCountersResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ConsultaCompleta">
+      <wsdl:input message="tns:ConsultaCompleta" name="ConsultaCompleta">
+    </wsdl:input>
+      <wsdl:output message="tns:ConsultaCompletaResponse" name="ConsultaCompletaResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="Consultar">
+      <wsdl:input message="tns:Consultar" name="Consultar">
+    </wsdl:input>
+      <wsdl:output message="tns:ConsultarResponse" name="ConsultarResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="buscarImagem">
+      <wsdl:input message="tns:buscarImagem" name="buscarImagem">
+    </wsdl:input>
+      <wsdl:output message="tns:buscarImagemResponse" name="buscarImagemResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="destroy">
+      <wsdl:input message="tns:destroy" name="destroy">
+    </wsdl:input>
+      <wsdl:output message="tns:destroyResponse" name="destroyResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Validar">
+      <wsdl:input message="tns:Validar" name="Validar">
+    </wsdl:input>
+      <wsdl:output message="tns:ValidarResponse" name="ValidarResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ServicoConsultaMedicosServiceSoapBinding" type="tns:ServicoConsultaMedicos">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="init">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="init">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="initResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="logCounters">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="logCounters">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="logCountersResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="ConsultaCompleta">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="ConsultaCompleta">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="ConsultaCompletaResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="Consultar">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="Consultar">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="ConsultarResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="buscarImagem">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="buscarImagem">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="buscarImagemResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="destroy">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="destroy">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="destroyResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Validar">
+      <soap:operation soapAction="" style="document"/>
+      <wsdl:input name="Validar">
+        <soap:body use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="ValidarResponse">
+        <soap:body use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ServicoConsultaMedicosService">
+    <wsdl:port binding="tns:ServicoConsultaMedicosServiceSoapBinding" name="ServicoConsultaMedicosPort">
+      <soap:address location="https://ws.cfm.org.br:8080/WebServiceConsultaMedicos/ServicoConsultaMedicos"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

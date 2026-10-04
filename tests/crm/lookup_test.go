@@ -75,7 +75,7 @@ func TestRejectsSOAP12AndUnknownOperation(t *testing.T) {
 	if rec := call(t, app, "application/soap+xml", "<ser:Consultar><crm>98765</crm><uf>SP</uf><chave>x</chave></ser:Consultar>"); rec.Code != 415 {
 		t.Errorf("SOAP 1.2: expected 415, got %d", rec.Code)
 	}
-	if rec := call(t, app, "text/xml", "<ser:Validar><crm>98765</crm></ser:Validar>"); rec.Code != 400 {
-		t.Errorf("Validar: expected 400, got %d", rec.Code)
+	if rec := call(t, app, "text/xml", "<ser:ConsultaCompleta><crm>98765</crm></ser:ConsultaCompleta>"); rec.Code != 400 {
+		t.Errorf("ConsultaCompleta: expected 400, got %d", rec.Code)
 	}
 }

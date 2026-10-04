@@ -104,6 +104,9 @@ type Config struct {
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
 	// POST /v1/webhooks/signatures/bry). Empty disables the callback.
 	BryScadWebhookURL string
+	// CRMAllowedLicenses lists license numbers the crm provider answers 200
+	// for, per MIMIC_CRM_ALLOWED_LICENSES (comma-separated).
+	CRMAllowedLicenses []string
 	// EnabledProviders filters which registered providers are served, per
 	// MIMIC_PROVIDERS (comma-separated). Empty means "all enabled."
 	EnabledProviders []string
@@ -135,16 +138,22 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	crmAllowed := getEnvList("MIMIC_CRM_ALLOWED_LICENSES")
+	if crmAllowed == nil {
+		crmAllowed = []string{"CRM-SP 98765"}
+	}
+
 	return Config{
-		Port:              port,
-		LogLevel:          logLevel,
-		SchedulerInterval: time.Duration(schedulerIntervalMS) * time.Millisecond,
-		DBPath:            getEnv("DB_PATH", "db/simulator.sqlite"),
-		DefaultDelay:      time.Duration(defaultDelayMS) * time.Millisecond,
-		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
-		OpenAPIPersist:    openAPIPersist,
-		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
-		BryScadWebhookURL: getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
+		Port:               port,
+		LogLevel:           logLevel,
+		SchedulerInterval:  time.Duration(schedulerIntervalMS) * time.Millisecond,
+		DBPath:             getEnv("DB_PATH", "db/simulator.sqlite"),
+		DefaultDelay:       time.Duration(defaultDelayMS) * time.Millisecond,
+		ZenviaStatusDelay:  time.Duration(zenviaStatusDelayMS) * time.Millisecond,
+		OpenAPIPersist:     openAPIPersist,
+		EnabledProviders:   getEnvList("MIMIC_PROVIDERS"),
+		CRMAllowedLicenses: crmAllowed,
+		BryScadWebhookURL:  getEnv("BRY_SCAD_WEBHOOK_URL", "http://golgimed-server:8080/v1/webhooks/signatures/bry"),
 	}, nil
 }
 

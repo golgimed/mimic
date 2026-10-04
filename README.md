@@ -123,6 +123,7 @@ type Provider struct {
 - **[IntegraICP](internal/providers/integraicp/README.md)** — Brazilian digital signature / ICP-Brasil certificate flows.
 - **[SNCR](internal/providers/sncr/README.md)** — ANVISA's controlled-prescription numbering allocation service.
 - **[BRy SCAD](internal/providers/bryscad/README.md)** — BRy SCAD digital signature collections (all 54 operations of BRy SCAD API REST v1).
+- **[CRM](internal/providers/crm/README.md)** — dev-only CFM physician-lookup stub (allow-list of license numbers).
 - **[OpenAPI adapter](specs/README.md)** — drop any OpenAPI 3.x spec into `specs/` and Mimic serves it as a mock provider (route prefix derived from the spec title, optional CRUD persistence), no hand-written code required.
 
 See each provider's README for endpoint-level usage and known limitations.

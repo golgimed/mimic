@@ -25,7 +25,9 @@ import (
 //
 // This is intentionally frozen at OpenAPI 3.0-shaped semantics pending a
 // timeboxed spike into an actual parsing library (kin-openapi vs.
-// pb33f/libopenapi) for proper 3.1 / JSON Schema 2020-12 and $ref support.
+// pb33f/libopenapi) for proper 3.1 / JSON Schema 2020-12 support. Local $refs
+// are resolved by ref.go in the meantime; replace it with the library's
+// resolver when that lands.
 // Don't grow doc/schema further without that spike — see the OpenAPI
 // providers plan (parsing-library issue) for the trade-offs already
 // considered.
@@ -42,11 +44,23 @@ type doc struct {
 	// CRUD-shaped routes. Optional; nil means "use the global default".
 	MimicPersist *bool                           `yaml:"x-mimic-persist"`
 	Paths        map[string]map[string]operation `yaml:"paths"`
+	Components   components                      `yaml:"components"`
+}
+
+// components holds the reusable definitions local $refs can point at. See
+// ref.go for how they're resolved.
+type components struct {
+	Schemas       map[string]*schema      `yaml:"schemas"`
+	Responses     map[string]*response    `yaml:"responses"`
+	RequestBodies map[string]*requestBody `yaml:"requestBodies"`
+	Parameters    map[string]*parameter   `yaml:"parameters"`
 }
 
 type operation struct {
 	OperationID string              `yaml:"operationId"`
 	Responses   map[string]response `yaml:"responses"`
+	RequestBody *requestBody        `yaml:"requestBody"`
+	Parameters  []parameter         `yaml:"parameters"`
 	// Behavior is the x-mimic-behavior vendor extension: a declarative,
 	// per-operation alternative to configuring a fault via PUT /admin/faults
 	// after the fact. Optional; nil means no spec-declared behavior for this
@@ -54,7 +68,20 @@ type operation struct {
 	Behavior *behaviorSpec `yaml:"x-mimic-behavior"`
 }
 
+type requestBody struct {
+	Ref     string               `yaml:"$ref"`
+	Content map[string]mediaType `yaml:"content"`
+}
+
+type parameter struct {
+	Ref    string  `yaml:"$ref"`
+	Name   string  `yaml:"name"`
+	In     string  `yaml:"in"`
+	Schema *schema `yaml:"schema"`
+}
+
 type response struct {
+	Ref     string               `yaml:"$ref"`
 	Content map[string]mediaType `yaml:"content"`
 }
 
@@ -69,6 +96,7 @@ type example struct {
 }
 
 type schema struct {
+	Ref        string             `yaml:"$ref"`
 	Type       string             `yaml:"type"`
 	Format     string             `yaml:"format"`
 	Properties map[string]*schema `yaml:"properties"`
@@ -99,7 +127,7 @@ type LoadedSpec struct {
 // unsupportedConstructKeys are OpenAPI/JSON Schema keys this adapter's doc
 // struct has no field for (see the comment on doc above) and therefore
 // silently drops via yaml.v3's unknown-field-ignore behavior.
-var unsupportedConstructKeys = []string{"$ref", "oneOf", "allOf", "anyOf"}
+var unsupportedConstructKeys = []string{"oneOf", "allOf", "anyOf"}
 
 // findUnsupportedConstructs walks a generically-decoded spec looking for any
 // key in unsupportedConstructKeys, returning the distinct ones found.
@@ -245,6 +273,10 @@ func Load(path string) (*LoadedSpec, error) {
 	var d doc
 	if err := yaml.Unmarshal(raw, &d); err != nil {
 		return nil, fmt.Errorf("parse spec %q: %w", path, err)
+	}
+
+	if err := resolveRefs(&d); err != nil {
+		return nil, fmt.Errorf("resolve refs in spec %q: %w", path, err)
 	}
 
 	var generic any

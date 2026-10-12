@@ -59,10 +59,20 @@ func seededFaker(key string) *gofakeit.Faker {
 // visited in sorted order so f's call sequence — and therefore the
 // generated values — stay stable regardless of Go's randomized map
 // iteration order.
+//
+// Resolved $refs share *schema pointers, so recursive schemas are cyclic: a
+// schema already being generated further up the path yields nil (or an empty
+// array) instead of recursing forever.
 func generateFromSchema(s *schema, f *gofakeit.Faker) any {
-	if s == nil {
+	return generate(s, f, map[*schema]bool{})
+}
+
+func generate(s *schema, f *gofakeit.Faker, path map[*schema]bool) any {
+	if s == nil || path[s] {
 		return nil
 	}
+	path[s] = true
+	defer delete(path, s)
 	if len(s.Enum) > 0 {
 		return s.Enum[0]
 	}
@@ -77,14 +87,17 @@ func generateFromSchema(s *schema, f *gofakeit.Faker) any {
 
 		out := make(map[string]any, len(s.Properties))
 		for _, name := range names {
-			out[name] = generateFromSchema(s.Properties[name], f)
+			out[name] = generate(s.Properties[name], f, path)
 		}
 		return out
 	case "array":
 		if s.Items == nil {
 			return []any{}
 		}
-		return []any{generateFromSchema(s.Items, f)}
+		if path[s.Items] {
+			return []any{}
+		}
+		return []any{generate(s.Items, f, path)}
 	case "string":
 		return fakeString(s.Format, f)
 	case "integer":

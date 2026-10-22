@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # CLAUDE.md
 
 # Mimic

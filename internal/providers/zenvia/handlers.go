@@ -1,10 +1,12 @@
 package zenvia
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/golgimed/mimic/internal/shared/httpx"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 func writeValidationError(w http.ResponseWriter) {
@@ -33,7 +35,7 @@ func toMessageResponse(m *Message) messageResponse {
 	}
 }
 
-func createMessageHandler(channel string, store *Store, scheduleAdvance func(string) error) http.HandlerFunc {
+func createMessageHandler(channel string, store *Store, scheduleAdvance func(context.Context, string) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var wire createMessageWire
 		if err := json.NewDecoder(r.Body).Decode(&wire); err != nil || !wire.valid(channel) {
@@ -47,7 +49,11 @@ func createMessageHandler(channel string, store *Store, scheduleAdvance func(str
 			return
 		}
 
-		if err := scheduleAdvance(message.ID); err != nil {
+		timeline.Record(r.Context(), timeline.Event{
+			Type: timeline.ResourceCreated, Provider: Name, ResourceType: "message", ResourceID: message.ID,
+			Data: map[string]any{"status": message.Status, "channel": channel},
+		})
+		if err := scheduleAdvance(r.Context(), message.ID); err != nil {
 			httpx.WriteJSON(w, http.StatusInternalServerError, map[string]string{"code": "INTERNAL_ERROR", "message": err.Error()})
 			return
 		}

@@ -8,9 +8,14 @@
 <body class="h-screen flex flex-col font-sans text-slate-800">
 <header class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
   <h1 class="text-lg font-semibold">Mimic</h1>
+  <div class="flex items-center gap-2">
+  <button id="show-timeline" class="text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md px-3 py-1.5 transition-colors">
+    Timeline
+  </button>
   <button id="flush" class="text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md px-3 py-1.5 transition-colors">
     Flush
   </button>
+  </div>
 </header>
 <div class="flex flex-1 overflow-hidden">
   <div id="list" class="w-2/5 overflow-y-auto border-r border-slate-200 bg-white">
@@ -58,17 +63,53 @@ async function loadItems() {
   }
 }
 
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// renderTimeline renders timeline events as a compact table.
+function renderTimeline(events) {
+  if (!events.length) return '<div class="text-slate-400 text-xs">(no events)</div>';
+  const rows = events.map(e => `
+    <tr class="align-top">
+      <td class="pr-3 py-1 text-slate-500 whitespace-nowrap">${escapeHTML(new Date(e.ts).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false}))}</td>
+      <td class="pr-3 py-1 font-medium whitespace-nowrap">${escapeHTML(e.type)}</td>
+      <td class="pr-3 py-1 text-slate-500 whitespace-nowrap">${escapeHTML([e.provider, e.resourceType, e.resourceId].filter(Boolean).join(' / '))}${e.jobId ? ' job #' + e.jobId : ''}</td>
+      <td class="py-1 text-slate-600 break-all">${e.data ? escapeHTML(JSON.stringify(e.data)) : ''}</td>
+    </tr>`).join('');
+  return `<table class="w-full text-xs">${rows}</table>`;
+}
+
+async function fetchTimeline(query) {
+  const res = await fetch('/admin/timeline' + query);
+  const { content } = await res.json();
+  return content;
+}
+
+document.getElementById('show-timeline').addEventListener('click', async () => {
+  selectedKey = null;
+  const events = await fetchTimeline('?limit=200');
+  document.getElementById('detail').innerHTML = `
+    <h2 class="text-base font-semibold mb-3">Timeline (latest ${events.length})</h2>
+    ${renderTimeline(events)}
+  `;
+  loadItems();
+});
+
 async function selectItem(provider, id) {
   selectedKey = provider + ':' + id;
   const res = await fetch(`/admin/items/${provider}/${id}`);
   const detail = await res.json();
+  const events = await fetchTimeline(`?provider=${encodeURIComponent(provider)}&resource_id=${encodeURIComponent(id)}`);
   const el = document.getElementById('detail');
   el.innerHTML = `
     <h2 class="text-base font-semibold mb-3">${provider} / ${id}</h2>
     <h3 class="text-sm font-medium text-slate-500 mb-1">Payload</h3>
     <pre class="bg-slate-50 rounded-md p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words mb-4">${JSON.stringify(detail.payload, null, 2)}</pre>
     <h3 class="text-sm font-medium text-slate-500 mb-1">Webhook Deliveries (${detail.webhookDeliveries.length})</h3>
-    <pre class="bg-slate-50 rounded-md p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words">${detail.webhookDeliveries.length ? JSON.stringify(detail.webhookDeliveries, null, 2) : '(none)'}</pre>
+    <pre class="bg-slate-50 rounded-md p-3 text-xs overflow-x-auto whitespace-pre-wrap break-words mb-4">${detail.webhookDeliveries.length ? JSON.stringify(detail.webhookDeliveries, null, 2) : '(none)'}</pre>
+    <h3 class="text-sm font-medium text-slate-500 mb-1">Timeline (${events.length})</h3>
+    <div class="bg-slate-50 rounded-md p-3">${renderTimeline(events)}</div>
   `;
   loadItems();
 }

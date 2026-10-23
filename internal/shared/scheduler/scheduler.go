@@ -12,18 +12,21 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 type JobHandler func(ctx context.Context, payload json.RawMessage) error
 
 type Scheduler struct {
 	db       *sql.DB
+	rec      *timeline.Recorder
 	mu       sync.RWMutex
 	handlers map[string]JobHandler
 }
 
 func New(db *sql.DB) *Scheduler {
-	return &Scheduler{db: db, handlers: make(map[string]JobHandler)}
+	return &Scheduler{db: db, rec: timeline.NewRecorder(db), handlers: make(map[string]JobHandler)}
 }
 
 func (s *Scheduler) RegisterJobHandler(kind string, handler JobHandler) {
@@ -32,16 +35,27 @@ func (s *Scheduler) RegisterJobHandler(kind string, handler JobHandler) {
 	s.handlers[kind] = handler
 }
 
-func (s *Scheduler) ScheduleJob(kind string, payload any, runAt time.Time) error {
+// ScheduleJob enqueues a job of kind to run at runAt. ctx is the
+// scheduling context (e.g. the HTTP request that caused it), used for the
+// timeline.
+func (s *Scheduler) ScheduleJob(ctx context.Context, kind string, payload any, runAt time.Time) error {
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal job payload: %w", err)
 	}
-	_, err = s.db.Exec(
+	runAtStr := runAt.UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(context.WithoutCancel(ctx),
 		"INSERT INTO jobs (kind, payload_json, run_at, status) VALUES (?, ?, ?, 'pending')",
-		kind, string(payloadJSON), runAt.UTC().Format(time.RFC3339Nano),
+		kind, string(payloadJSON), runAtStr,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	id, _ := res.LastInsertId()
+	timeline.Record(timeline.WithRecorder(ctx, s.rec), timeline.Event{
+		Type: timeline.JobScheduled, JobID: id, Data: map[string]any{"kind": kind, "runAt": runAtStr},
+	})
+	return nil
 }
 
 type jobRow struct {
@@ -94,6 +108,12 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 // any), and marks it done/failed. Errors are logged, not returned — one
 // job's failure never stops Tick from processing the rest.
 func (s *Scheduler) processJob(ctx context.Context, j due) {
+	ctx = timeline.WithRecorder(ctx, s.rec)
+	jobEvent := func(typ timeline.Type, data map[string]any) {
+		data["kind"] = j.kind
+		timeline.Record(ctx, timeline.Event{Type: typ, JobID: j.id, Data: data})
+	}
+
 	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'processing' WHERE id = ?", j.id); err != nil {
 		slog.Error("scheduler: failed to mark job processing", "job_id", j.id, "kind", j.kind, "error", err)
 		return
@@ -103,12 +123,14 @@ func (s *Scheduler) processJob(ctx context.Context, j due) {
 	handler, ok := s.handlers[j.kind]
 	s.mu.RUnlock()
 
+	jobEvent(timeline.JobStarted, map[string]any{})
 	var handlerErr error
 	if ok {
 		handlerErr = handler(ctx, json.RawMessage(j.payloadJSON))
 	}
 
 	if handlerErr != nil {
+		jobEvent(timeline.JobFailed, map[string]any{"error": handlerErr.Error()})
 		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id); err != nil {
 			slog.Error("scheduler: failed to mark job failed", "job_id", j.id, "kind", j.kind, "handler_error", handlerErr, "error", err)
 		} else {
@@ -116,6 +138,7 @@ func (s *Scheduler) processJob(ctx context.Context, j due) {
 		}
 		return
 	}
+	jobEvent(timeline.JobCompleted, map[string]any{})
 	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'done' WHERE id = ?", j.id); err != nil {
 		slog.Error("scheduler: failed to mark job done", "job_id", j.id, "kind", j.kind, "error", err)
 	}

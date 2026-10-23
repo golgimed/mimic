@@ -77,11 +77,11 @@ func TestScheduledTransitionRunsOnTickAndSkipsStale(t *testing.T) {
 		{ID: "d2", From: "PENDING", To: "SIGNED", After: time.Hour},
 		{ID: "d3", From: "PENDING", To: "REJECTED"},
 	} {
-		if err := r.Schedule(tr); err != nil {
+		if err := r.Schedule(ctx, tr); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := r.Schedule(Transition{ID: "d1", From: "SIGNED", To: "PENDING"}); !errors.Is(err, ErrInvalidTransition) {
+	if err := r.Schedule(ctx, Transition{ID: "d1", From: "SIGNED", To: "PENDING"}); !errors.Is(err, ErrInvalidTransition) {
 		t.Fatalf("scheduling a disallowed edge err = %v", err)
 	}
 

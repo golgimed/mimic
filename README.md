@@ -178,6 +178,14 @@ Every endpoint mirrors its real provider's relative path and payload shape as cl
 
 The "Flush" button (`POST /admin/flush`) wipes every table's data (items, faults, webhook logs) while keeping the schema, so you can reset state between test runs without restarting the server.
 
+## Timeline
+
+Every simulated interaction is recorded as an ordered event log: `RequestReceived`, `ResponseReturned`, `ResourceCreated`, `StateChanged`, `JobScheduled`/`JobStarted`/`JobCompleted`/`JobFailed`, `WebhookDelivered`/`WebhookFailed`/`WebhookDropped`, and `FaultApplied`. Read it with `GET /admin/timeline` (filters: `provider`, `resource_id`, `limit` — default 500, newest kept, returned oldest first), from the dashboard's **Timeline** button, or per resource in the dashboard's item detail. Control-plane calls (`/admin`, `/dashboard`, `/health`) are not recorded, and Flush clears the timeline.
+
+```bash
+curl "http://localhost:3000/admin/timeline?provider=zenvia&resource_id=<message-id>"
+```
+
 ## Fault injection
 
 Simulate failures without touching code:

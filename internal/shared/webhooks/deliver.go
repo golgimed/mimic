@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/registry"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 type DeliverInput struct {
@@ -25,11 +26,12 @@ type DeliverInput struct {
 }
 
 // LogDropped records a fault-injected dropped webhook without attempting delivery.
-func LogDropped(db *sql.DB, input DeliverInput) error {
+func LogDropped(ctx context.Context, db *sql.DB, input DeliverInput) error {
 	payloadJSON, err := json.Marshal(input.Payload)
 	if err != nil {
 		return err
 	}
+	recordDelivery(ctx, timeline.WebhookDropped, input, nil)
 	_, err = db.Exec(
 		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code)
 		 VALUES (?, ?, ?, ?, ?, 'dropped', NULL)`,
@@ -117,6 +119,12 @@ func Deliver(ctx context.Context, db *sql.DB, input DeliverInput) error {
 		status = "failed"
 	}
 
+	typ := timeline.WebhookDelivered
+	if status == "failed" {
+		typ = timeline.WebhookFailed
+	}
+	recordDelivery(ctx, typ, input, responseCode)
+
 	if _, err := db.Exec(
 		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -125,4 +133,14 @@ func Deliver(ctx context.Context, db *sql.DB, input DeliverInput) error {
 		return fmt.Errorf("record webhook delivery: %w", err)
 	}
 	return nil
+}
+
+func recordDelivery(ctx context.Context, typ timeline.Type, input DeliverInput, responseCode any) {
+	data := map[string]any{"url": input.URL}
+	if code, ok := responseCode.(sql.NullInt64); ok && code.Valid {
+		data["responseCode"] = code.Int64
+	}
+	timeline.Record(ctx, timeline.Event{
+		Type: typ, Provider: input.Provider, ResourceType: input.ResourceType, ResourceID: input.ResourceID, Data: data,
+	})
 }

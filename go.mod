@@ -3,7 +3,7 @@ module github.com/golgimed/mimic
 go 1.26.0
 
 require (
-	github.com/brianvoe/gofakeit/v7 v7.17.1
+	github.com/brianvoe/gofakeit/v7 v7.18.0
 	github.com/google/uuid v1.6.0
 	github.com/rluders/lane v1.0.0
 	gopkg.in/yaml.v3 v3.0.1

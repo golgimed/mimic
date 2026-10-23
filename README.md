@@ -215,6 +215,21 @@ curl http://localhost:3000/zenvia/subscriptions -H "X-API-TOKEN: t" -H "X-Mimic-
 - A scheduled job runs in the simulation of the request that scheduled it.
 - Values that stay non-deterministic: provider-assigned UUIDs such as Zenvia message ids, BRy collection keys and webhook event ids, plus wall-clock timestamps. They identify resources rather than drive behavior.
 
+## Simulation time
+
+Everything time-based in a simulation — scheduled jobs and state-transition delays (e.g. `ZENVIA_STATUS_DELAY_MS`), token expiry, rate-limit windows, provider timestamps, timeline timestamps and simulated latency — reads a simulation clock instead of the system clock:
+
+- `MIMIC_CLOCK=realtime` (default): simulation time is wall-clock time. Behavior is unchanged.
+- `MIMIC_CLOCK=accelerated`: simulation time runs `MIMIC_CLOCK_SPEED` times faster (default 60, so one real second is one simulated minute). Latency faults sleep proportionally less.
+- `MIMIC_CLOCK=virtual`: simulation time stands still until you advance it. Advancing runs every scheduled job that falls due on the way, in due-time order, with the clock set to each job's due time, so a whole lifecycle can be fast-forwarded in one call. Latency faults don't sleep.
+
+```bash
+curl http://localhost:3000/admin/clock                      # {"mode":"virtual","now":"…"}
+curl -X POST http://localhost:3000/admin/clock/advance -d '{"duration":"24h"}'
+```
+
+Advancing a realtime clock returns `409 REALTIME_CLOCK`. The scheduler still polls every `SCHEDULER_INTERVAL_MS` of real time. The `created_at`/`updated_at` bookkeeping columns written by SQLite stay on wall-clock time; they record when Mimic stored a row, not simulated time.
+
 ## Fault injection
 
 Simulate failures without touching code:
@@ -237,6 +252,8 @@ Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload`, `webhook_dropped
 | `SCHEDULER_INTERVAL_MS` | `1000` | Background job poll interval |
 | `MIMIC_PROVIDERS` | *(all registered)* | Comma-separated list of provider names to enable, e.g. `zenvia,integraicp` |
 | `MIMIC_OPENAPI_PERSIST` | `false` | Enable real CRUD persistence for spec-mocked routes (see [specs/README.md](specs/README.md)) |
+| `MIMIC_CLOCK` | `realtime` | Simulation time: `realtime`, `accelerated` or `virtual` (see [Simulation time](#simulation-time)) |
+| `MIMIC_CLOCK_SPEED` | `60` | Simulated seconds per real second when `MIMIC_CLOCK=accelerated` |
 | `MIMIC_OPENAPI_VALIDATION` | `permissive` | `strict` rejects requests that violate a spec's contract with 400; `permissive` serves them with an `X-Mimic-Validation-Warning` header (see [specs/README.md](specs/README.md)) |
 
 Provider-specific variables (e.g. `ZENVIA_STATUS_DELAY_MS`) are documented in each provider's README.

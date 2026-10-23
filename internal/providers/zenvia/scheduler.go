@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/lifecycle"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/webhooks"
@@ -110,7 +111,7 @@ func notifySubscription(ctx context.Context, db *sql.DB, faultStore *admin.Store
 func statusEventPayload(sub Subscription, message *Message, next string) map[string]any {
 	return map[string]any{
 		"id":             uuid.NewString(),
-		"timestamp":      time.Now().UTC().Format(time.RFC3339Nano),
+		"timestamp":      clock.Now().Format(time.RFC3339Nano),
 		"subscriptionId": sub.ID,
 		"type":           "MESSAGE_STATUS",
 		"channel":        message.Channel,
@@ -123,7 +124,7 @@ func statusEventPayload(sub Subscription, message *Message, next string) map[str
 		},
 		"messageStatus": map[string]any{
 			"code":      next,
-			"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+			"timestamp": clock.Now().Format(time.RFC3339Nano),
 			"channel":   message.Channel,
 			"direction": message.Direction,
 		},

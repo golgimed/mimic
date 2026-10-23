@@ -20,6 +20,7 @@ import (
 	"github.com/golgimed/mimic/internal/providers/crm"
 	"github.com/golgimed/mimic/internal/registry"
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/faults"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/storage"
@@ -59,7 +60,10 @@ func New(t *testing.T, zenviaStatusDelay time.Duration) *App {
 
 	reg := registry.New()
 	faultStore := admin.NewStore(db)
+	realtime, _ := clock.New(clock.Realtime, 1)
+	clock.Set(realtime)
 	sched := scheduler.New(db)
+	clock.SetRunner(sched.RunUntil)
 	// bry-scad completion webhook is unused by in-process Go tests today — the
 	// real-Mimic BRy loop is exercised against a running container instead
 	// (golgimed's *_mimic_e2e_test.go, gated on MIMIC_BASE_URL).

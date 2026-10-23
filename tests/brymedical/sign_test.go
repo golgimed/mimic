@@ -6,9 +6,9 @@ import (
 	"mime/multipart"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/testutil"
 )
 
@@ -161,8 +161,14 @@ func TestSignUnknownToken(t *testing.T) {
 
 func TestSignExpiredToken(t *testing.T) {
 	app := testutil.New(t, 0)
+	virtual, _ := clock.New(clock.Virtual, 1)
+	clock.Set(virtual)
+	t.Cleanup(func() { rt, _ := clock.New(clock.Realtime, 1); clock.Set(rt) })
+
 	token := preAuthorize(t, app, "1")
-	time.Sleep(1100 * time.Millisecond)
+	if rec := app.Do(t, "POST", "/admin/clock/advance", nil, map[string]any{"duration": "1100ms"}); rec.Code != 200 {
+		t.Fatalf("advance clock: %d %s", rec.Code, rec.Body.String())
+	}
 
 	rec := signRequest(t, app, signHeaders(token), dadosAssinatura("TIMESTAMP", token), sampleMetadados(), []byte("%PDF-1.4 fake"), false)
 	if rec.Code == 200 {

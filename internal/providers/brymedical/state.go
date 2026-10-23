@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 type Store struct{ db *sql.DB }
@@ -17,7 +19,7 @@ func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 // trusting the caller, so ConsumeToken decrements and deletes on exhaustion.
 func (s *Store) CreateToken(uuidChave string, uses int, ttl time.Duration) (token string, quantidadeRestante int, err error) {
 	token = uuid.NewString()
-	expiresAt := time.Now().UTC().Add(ttl).Format(time.RFC3339Nano)
+	expiresAt := clock.Now().Add(ttl).Format(time.RFC3339Nano)
 	if _, err = s.db.Exec(
 		`INSERT INTO bry_medical_preauth_tokens (token, uuid_chave, uses_remaining, expires_at) VALUES (?, ?, ?, ?)`,
 		token, uuidChave, uses, expiresAt,
@@ -47,7 +49,7 @@ func (s *Store) ConsumeToken(token string) (ok bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	if time.Now().UTC().After(expiry) || usesRemaining <= 0 {
+	if clock.Now().After(expiry) || usesRemaining <= 0 {
 		return false, nil
 	}
 

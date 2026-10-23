@@ -18,6 +18,8 @@ import (
 
 	"github.com/brianvoe/gofakeit/v7"
 	"github.com/google/uuid"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 // Headers: clients select a simulation with HeaderID; responses report the
@@ -134,7 +136,7 @@ func (st *Store) Create(ctx context.Context, seed int64, implicit bool) (*Simula
 		ID:        "sim_" + uuid.NewString(),
 		Seed:      seed,
 		Implicit:  implicit,
-		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+		CreatedAt: clock.Now().Format(time.RFC3339Nano),
 	}
 	if _, err := st.db.ExecContext(context.WithoutCancel(ctx),
 		`INSERT INTO simulations (id, seed, implicit, created_at) VALUES (?, ?, ?, ?)`,

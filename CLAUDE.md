@@ -99,6 +99,7 @@ internal/
         timeline/         # simulation event log (GET /admin/timeline)
         correlation/      # request IDs propagated through async work
         sim/              # simulations: seeds + deterministic randomness
+        clock/            # simulation clock (realtime / accelerated / virtual)
         httpx/             # shared JSON response helpers
         scheduler/
         storage/

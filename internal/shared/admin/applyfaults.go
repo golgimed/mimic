@@ -9,6 +9,7 @@ import (
 
 	"github.com/golgimed/mimic/internal/shared/behavior"
 	"github.com/golgimed/mimic/internal/shared/faults"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
@@ -31,7 +32,7 @@ func RequestFaultHook(store *Store, provider, routePattern string) func(http.Han
 }
 
 func applyFault(store *Store, provider, routePattern string, next http.Handler, w http.ResponseWriter, r *http.Request) {
-	fault, err := store.ConsumeMatchingFault(provider, routePattern)
+	fault, err := store.ConsumeMatchingFault(r.Context(), provider, routePattern)
 	if err != nil || fault == nil {
 		next.ServeHTTP(w, r)
 		return
@@ -63,7 +64,7 @@ func applyDelayFault(fault *FaultConfig, next http.Handler, w http.ResponseWrite
 	var d time.Duration
 	if fault.DelayDistribution != nil {
 		if dist, err := behavior.ParseDistribution(*fault.DelayDistribution); err == nil {
-			d = dist.Sample()
+			d = dist.Sample(sim.Rand(r.Context(), "latency:"+fault.randKey()))
 		}
 	} else if fault.FaultValue != nil {
 		ms, _ := strconv.ParseInt(*fault.FaultValue, 10, 64)

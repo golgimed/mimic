@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/golgimed/mimic/internal/registry"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/storage"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
@@ -41,6 +42,15 @@ func RegisterRoutes(mux *http.ServeMux, db *sql.DB, store *Store, reg *registry.
 	})
 	mux.HandleFunc("GET /admin/timeline", func(w http.ResponseWriter, r *http.Request) {
 		handleTimeline(w, r, db)
+	})
+	mux.HandleFunc("POST /admin/simulations", func(w http.ResponseWriter, r *http.Request) {
+		handleCreateSimulation(w, r, db)
+	})
+	mux.HandleFunc("GET /admin/simulations", func(w http.ResponseWriter, r *http.Request) {
+		handleListSimulations(w, r, db)
+	})
+	mux.HandleFunc("GET /admin/simulations/{id}", func(w http.ResponseWriter, r *http.Request) {
+		handleGetSimulation(w, r, db)
 	})
 	mux.HandleFunc("POST /admin/flush", func(w http.ResponseWriter, r *http.Request) {
 		handleFlush(w, db)
@@ -108,14 +118,15 @@ func handleFlush(w http.ResponseWriter, db *sql.DB) {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
+	sim.StoreFor(db).Reset()
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleTimeline serves GET /admin/timeline?request_id=&provider=&resource_id=&limit=,
+// handleTimeline serves GET /admin/timeline?request_id=&simulation_id=&provider=&resource_id=&limit=,
 // oldest event first.
 func handleTimeline(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	q := r.URL.Query()
-	f := timeline.Filter{RequestID: q.Get("request_id"), Provider: q.Get("provider"), ResourceID: q.Get("resource_id")}
+	f := timeline.Filter{RequestID: q.Get("request_id"), SimulationID: q.Get("simulation_id"), Provider: q.Get("provider"), ResourceID: q.Get("resource_id")}
 	if l := q.Get("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {

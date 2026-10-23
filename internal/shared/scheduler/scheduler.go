@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/shared/correlation"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
@@ -46,8 +47,8 @@ func (s *Scheduler) ScheduleJob(ctx context.Context, kind string, payload any, r
 	}
 	runAtStr := runAt.UTC().Format(time.RFC3339Nano)
 	res, err := s.db.ExecContext(context.WithoutCancel(ctx),
-		"INSERT INTO jobs (kind, payload_json, run_at, status, request_id) VALUES (?, ?, ?, 'pending', ?)",
-		kind, string(payloadJSON), runAtStr, correlation.RequestID(ctx),
+		"INSERT INTO jobs (kind, payload_json, run_at, status, request_id, simulation_id) VALUES (?, ?, ?, 'pending', ?, ?)",
+		kind, string(payloadJSON), runAtStr, correlation.RequestID(ctx), simulationID(ctx),
 	)
 	if err != nil {
 		return err
@@ -63,6 +64,14 @@ type jobRow struct {
 	id          int64
 	payloadJSON string
 	requestID   string
+	simID       string
+}
+
+func simulationID(ctx context.Context) string {
+	if s := sim.FromContext(ctx); s != nil {
+		return s.ID
+	}
+	return ""
 }
 
 type due struct {
@@ -87,7 +96,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT id, kind, payload_json, request_id FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
+		"SELECT id, kind, payload_json, request_id, simulation_id FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
 		now,
 	)
 	if err != nil {
@@ -98,7 +107,7 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	var jobs []due
 	for rows.Next() {
 		var j due
-		if err := rows.Scan(&j.id, &j.kind, &j.payloadJSON, &j.requestID); err != nil {
+		if err := rows.Scan(&j.id, &j.kind, &j.payloadJSON, &j.requestID, &j.simID); err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, j)
@@ -115,7 +124,16 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 // stays traceable to that request.
 func (s *Scheduler) processJob(ctx context.Context, j due) {
 	ctx = correlation.WithRequestID(timeline.WithRecorder(ctx, s.rec), j.requestID)
-	log := slog.With("job_id", j.id, "kind", j.kind, "request_id", j.requestID)
+	log := slog.With("job_id", j.id, "kind", j.kind, "request_id", j.requestID, "simulation_id", j.simID)
+	// Restore the scheduling request's simulation so the job draws from
+	// the same seed (and the same draw counters, for explicit ones).
+	if j.simID != "" {
+		if simulation, err := sim.StoreFor(s.db).Get(ctx, j.simID); err == nil {
+			ctx = sim.WithSimulation(ctx, simulation)
+		} else {
+			log.Warn("scheduler: job's simulation not found; running unseeded", "error", err)
+		}
+	}
 	jobEvent := func(typ timeline.Type, data map[string]any) {
 		data["kind"] = j.kind
 		timeline.Record(ctx, timeline.Event{Type: typ, JobID: j.id, Data: data})

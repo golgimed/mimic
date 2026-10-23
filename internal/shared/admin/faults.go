@@ -4,11 +4,13 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"sync"
 
 	"github.com/golgimed/mimic/internal/shared/behavior"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/google/uuid"
 )
 
@@ -135,8 +137,11 @@ func (s *Store) DeleteFaultsByProvider(provider string) error {
 // returns it. Exact route_pattern matches win over provider-wide (null
 // pattern) faults. A fault with a probability that doesn't fire this time is
 // treated as no match and its remaining_uses is left untouched.
-func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfig, error) {
-	tx, err := s.db.Begin()
+//
+// The probability roll draws from ctx's simulation seed (internal/shared/
+// sim), so it is reproducible for a given seed and request sequence.
+func (s *Store) ConsumeMatchingFault(ctx context.Context, provider, routePattern string) (*FaultConfig, error) {
+	tx, err := s.db.BeginTx(context.WithoutCancel(ctx), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +156,7 @@ func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfi
 		return nil, err
 	}
 
-	if !behavior.ShouldApply(f.Probability) {
+	if f.Probability != nil && !behavior.ShouldApply(sim.Rand(ctx, "fault:"+f.randKey()), f.Probability) {
 		return nil, tx.Commit()
 	}
 
@@ -171,4 +176,15 @@ func (s *Store) ConsumeMatchingFault(provider, routePattern string) (*FaultConfi
 		return nil, err
 	}
 	return f, nil
+}
+
+// randKey names this fault's random stream by what it targets (not its
+// random ID), so the same fault configuration under the same simulation
+// seed rolls the same way across runs.
+func (f *FaultConfig) randKey() string {
+	route := "*"
+	if f.RoutePattern != nil {
+		route = *f.RoutePattern
+	}
+	return f.Provider + ":" + route + ":" + string(f.FaultKind)
 }

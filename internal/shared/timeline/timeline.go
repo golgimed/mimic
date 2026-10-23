@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/shared/correlation"
+	"github.com/golgimed/mimic/internal/shared/sim"
 )
 
 // Type is a timeline event type.
@@ -47,6 +48,7 @@ type Event struct {
 	ResourceType string         `json:"resourceType,omitempty"`
 	ResourceID   string         `json:"resourceId,omitempty"`
 	RequestID    string         `json:"requestId,omitempty"`
+	SimulationID string         `json:"simulationId,omitempty"`
 	JobID        int64          `json:"jobId,omitempty"`
 	Data         map[string]any `json:"data,omitempty"`
 }
@@ -74,6 +76,11 @@ func Record(ctx context.Context, ev Event) {
 	if ev.RequestID == "" {
 		ev.RequestID = correlation.RequestID(ctx)
 	}
+	if ev.SimulationID == "" {
+		if s := sim.FromContext(ctx); s != nil {
+			ev.SimulationID = s.ID
+		}
+	}
 	if ev.Time == "" {
 		ev.Time = time.Now().UTC().Format(time.RFC3339Nano)
 	}
@@ -91,9 +98,9 @@ func Record(ctx context.Context, ev Event) {
 		jobID = ev.JobID
 	}
 	if _, err := rec.db.ExecContext(context.WithoutCancel(ctx),
-		`INSERT INTO timeline_events (ts, type, provider, resource_type, resource_id, request_id, job_id, data_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ev.Time, string(ev.Type), ev.Provider, ev.ResourceType, ev.ResourceID, ev.RequestID, jobID, data,
+		`INSERT INTO timeline_events (ts, type, provider, resource_type, resource_id, request_id, simulation_id, job_id, data_json)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ev.Time, string(ev.Type), ev.Provider, ev.ResourceType, ev.ResourceID, ev.RequestID, ev.SimulationID, jobID, data,
 	); err != nil {
 		slog.Warn("timeline: record event", "type", ev.Type, "error", err)
 	}
@@ -101,10 +108,11 @@ func Record(ctx context.Context, ev Event) {
 
 // Filter narrows List. Zero fields don't filter.
 type Filter struct {
-	RequestID  string
-	Provider   string
-	ResourceID string
-	Limit      int // default 500
+	RequestID    string
+	SimulationID string
+	Provider     string
+	ResourceID   string
+	Limit        int // default 500
 }
 
 // List returns matching events, oldest first.
@@ -114,6 +122,10 @@ func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 	if f.RequestID != "" {
 		where = append(where, "request_id = ?")
 		args = append(args, f.RequestID)
+	}
+	if f.SimulationID != "" {
+		where = append(where, "simulation_id = ?")
+		args = append(args, f.SimulationID)
 	}
 	if f.Provider != "" {
 		where = append(where, "provider = ?")
@@ -127,7 +139,7 @@ func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	query := `SELECT id, ts, type, provider, resource_type, resource_id, request_id, job_id, data_json FROM timeline_events`
+	query := `SELECT id, ts, type, provider, resource_type, resource_id, request_id, simulation_id, job_id, data_json FROM timeline_events`
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -149,7 +161,7 @@ func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 			jobID sql.NullInt64
 			data  sql.NullString
 		)
-		if err := rows.Scan(&ev.ID, &ev.Time, &typ, &ev.Provider, &ev.ResourceType, &ev.ResourceID, &ev.RequestID, &jobID, &data); err != nil {
+		if err := rows.Scan(&ev.ID, &ev.Time, &typ, &ev.Provider, &ev.ResourceType, &ev.ResourceID, &ev.RequestID, &ev.SimulationID, &jobID, &data); err != nil {
 			return nil, err
 		}
 		ev.Type = Type(typ)

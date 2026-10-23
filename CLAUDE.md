@@ -98,6 +98,7 @@ internal/
         lifecycle/        # explicit state machines + scheduled transitions
         timeline/         # simulation event log (GET /admin/timeline)
         correlation/      # request IDs propagated through async work
+        sim/              # simulations: seeds + deterministic randomness
         httpx/             # shared JSON response helpers
         scheduler/
         storage/

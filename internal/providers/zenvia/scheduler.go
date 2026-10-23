@@ -24,14 +24,14 @@ var messageLifecycle = lifecycle.NewMachine("message", map[string][]string{
 // RegisterScheduler wires the message lifecycle onto the job scheduler and
 // returns a ScheduleAdvance closure handlers use to start a freshly created
 // (ACCEPTED) message down its status path.
-func RegisterScheduler(sched *scheduler.Scheduler, db *sql.DB, store *Store, faultStore *admin.Store, statusDelay time.Duration) func(messageID string) error {
+func RegisterScheduler(sched *scheduler.Scheduler, db *sql.DB, store *Store, faultStore *admin.Store, statusDelay time.Duration) func(ctx context.Context, messageID string) error {
 	var runner *lifecycle.Runner
-	scheduleNext := func(messageID, from string) error {
+	scheduleNext := func(ctx context.Context, messageID, from string) error {
 		next, ok := messageLifecycle.Next(from)
 		if !ok {
 			return nil
 		}
-		return runner.Schedule(lifecycle.Transition{ID: messageID, From: from, To: next, After: statusDelay})
+		return runner.Schedule(ctx, lifecycle.Transition{ID: messageID, From: from, To: next, After: statusDelay})
 	}
 
 	current := func(_ context.Context, id string) (string, bool, error) {
@@ -41,23 +41,23 @@ func RegisterScheduler(sched *scheduler.Scheduler, db *sql.DB, store *Store, fau
 		}
 		return message.Status, true, nil
 	}
-	apply := func(ctx context.Context, t lifecycle.Transition) error {
-		if err := advanceMessage(ctx, db, store, faultStore, t); err != nil {
-			return err
-		}
-		return scheduleNext(t.ID, t.To)
+	apply := func(_ context.Context, t lifecycle.Transition) error {
+		return store.UpdateMessageStatus(t.ID, t.To)
 	}
 	runner = lifecycle.NewRunner(Name, messageLifecycle, sched, current, apply)
+	runner.OnChanged = func(ctx context.Context, t lifecycle.Transition) error {
+		if err := notifyStatus(ctx, db, store, faultStore, t); err != nil {
+			return err
+		}
+		return scheduleNext(ctx, t.ID, t.To)
+	}
 
-	return func(messageID string) error { return scheduleNext(messageID, "ACCEPTED") }
+	return func(ctx context.Context, messageID string) error { return scheduleNext(ctx, messageID, "ACCEPTED") }
 }
 
-// advanceMessage persists one status hop and notifies every matching
-// subscription with a MESSAGE_STATUS event.
-func advanceMessage(ctx context.Context, db *sql.DB, store *Store, faultStore *admin.Store, t lifecycle.Transition) error {
-	if err := store.UpdateMessageStatus(t.ID, t.To); err != nil {
-		return err
-	}
+// notifyStatus notifies every subscription matching the message's channel
+// of its new status with a MESSAGE_STATUS event.
+func notifyStatus(ctx context.Context, db *sql.DB, store *Store, faultStore *admin.Store, t lifecycle.Transition) error {
 	message, err := store.GetMessage(t.ID)
 	if err != nil || message == nil {
 		return err
@@ -90,7 +90,7 @@ func notifySubscription(ctx context.Context, db *sql.DB, faultStore *admin.Store
 	}
 
 	if webhookFault != nil && webhookFault.FaultKind == admin.FaultWebhookDropped {
-		return webhooks.LogDropped(db, webhooks.DeliverInput{
+		return webhooks.LogDropped(ctx, db, webhooks.DeliverInput{
 			Provider: Name, ResourceType: "message", ResourceID: message.ID,
 			URL: sub.WebhookURL, Payload: eventPayload,
 		})

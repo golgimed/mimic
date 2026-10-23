@@ -9,6 +9,7 @@ import (
 
 	"github.com/golgimed/mimic/internal/shared/behavior"
 	"github.com/golgimed/mimic/internal/shared/faults"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 const (
@@ -35,6 +36,11 @@ func applyFault(store *Store, provider, routePattern string, next http.Handler, 
 		next.ServeHTTP(w, r)
 		return
 	}
+	data := map[string]any{"faultId": fault.ID, "kind": string(fault.FaultKind), "route": routePattern}
+	if fault.FaultValue != nil {
+		data["value"] = *fault.FaultValue
+	}
+	timeline.Record(r.Context(), timeline.Event{Type: timeline.FaultApplied, Provider: provider, Data: data})
 
 	switch fault.FaultKind {
 	case FaultDelayMS:

@@ -96,6 +96,7 @@ internal/
         faults/
         behavior/         # probability + latency-distribution primitives
         lifecycle/        # explicit state machines + scheduled transitions
+        timeline/         # simulation event log (GET /admin/timeline)
         httpx/             # shared JSON response helpers
         scheduler/
         storage/

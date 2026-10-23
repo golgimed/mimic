@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/shared/scheduler"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 // ErrInvalidTransition is returned when a transition isn't allowed from the
@@ -69,8 +70,7 @@ type Transition struct {
 // doesn't exist.
 type CurrentFunc func(ctx context.Context, id string) (state string, ok bool, err error)
 
-// ApplyFunc persists t.To for the resource and performs the provider's side
-// effects (webhooks, scheduling the following hop, ...).
+// ApplyFunc persists t.To for the resource.
 type ApplyFunc func(ctx context.Context, t Transition) error
 
 // Runner executes transitions for one Machine.
@@ -81,6 +81,11 @@ type Runner struct {
 	sched    *scheduler.Scheduler
 	current  CurrentFunc
 	apply    ApplyFunc
+
+	// OnChanged, if set, runs after a transition is persisted and
+	// recorded: the provider's side effects (webhooks, scheduling the
+	// following hop, ...).
+	OnChanged ApplyFunc
 }
 
 // NewRunner builds a Runner and, if sched is non-nil, registers the
@@ -120,19 +125,26 @@ func (r *Runner) Apply(ctx context.Context, t Transition) error {
 	if err := r.apply(ctx, t); err != nil {
 		return err
 	}
+	timeline.Record(ctx, timeline.Event{
+		Type: timeline.StateChanged, Provider: r.provider, ResourceType: r.Machine.Resource, ResourceID: t.ID,
+		Data: map[string]any{"from": t.From, "to": t.To},
+	})
 	slog.Debug("lifecycle: state changed", "provider", r.provider, "resource", r.Machine.Resource, "id", t.ID, "from", t.From, "to", t.To)
+	if r.OnChanged != nil {
+		return r.OnChanged(ctx, t)
+	}
 	return nil
 }
 
 // Schedule enqueues t on the job scheduler to run after t.After.
-func (r *Runner) Schedule(t Transition) error {
+func (r *Runner) Schedule(ctx context.Context, t Transition) error {
 	if r.sched == nil {
 		return errors.New("lifecycle: runner has no scheduler")
 	}
 	if !r.Machine.Can(t.From, t.To) {
 		return fmt.Errorf("%w: %s %s %s -> %s", ErrInvalidTransition, r.Machine.Resource, t.ID, t.From, t.To)
 	}
-	return r.sched.ScheduleJob(r.jobKind, t, time.Now().Add(t.After))
+	return r.sched.ScheduleJob(ctx, r.jobKind, t, time.Now().Add(t.After))
 }
 
 // handleJob runs a scheduled transition. A resource that has since been

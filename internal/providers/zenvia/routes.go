@@ -1,6 +1,7 @@
 package zenvia
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/golgimed/mimic/internal/shared/admin"
@@ -19,7 +20,7 @@ func withMiddleware(mux *http.ServeMux, faultStore *admin.Store, method, path st
 	mux.Handle(method+" "+path, wrapped)
 }
 
-func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, scheduleAdvance func(string) error) {
+func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, scheduleAdvance func(context.Context, string) error) {
 	withMiddleware(mux, faultStore, "POST", "/zenvia/channels/sms/messages", createMessageHandler("sms", store, scheduleAdvance))
 	withMiddleware(mux, faultStore, "POST", "/zenvia/channels/whatsapp/messages", createMessageHandler("whatsapp", store, scheduleAdvance))
 	withMiddleware(mux, faultStore, "POST", "/zenvia/channels/email/messages", createMessageHandler("email", store, scheduleAdvance))

@@ -13,6 +13,7 @@ import (
 	"github.com/golgimed/mimic/dashboard"
 	"github.com/golgimed/mimic/internal/registry"
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
 // NewMux builds the root ServeMux: /health, /ready, /dashboard, every enabled
@@ -31,9 +32,14 @@ func NewMux(reg *registry.Registry, db *sql.DB, store *admin.Store, enabledProvi
 		_, _ = w.Write([]byte(dashboard.HTML))
 	})
 
+	// Provider routes live on their own mux so every simulated request
+	// goes through the timeline middleware; /health, /dashboard and /admin
+	// are Mimic's control plane and stay off the timeline.
+	providerMux := http.NewServeMux()
 	for _, p := range reg.Enabled(enabledProviders) {
-		p.Register(mux)
+		p.Register(providerMux)
 	}
+	mux.Handle("/", withTimeline(timeline.NewRecorder(db), providerMux))
 
 	admin.RegisterRoutes(mux, db, store, reg, enabledProviders)
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/golgimed/mimic/internal/shared/httpx"
 	"github.com/golgimed/mimic/internal/shared/lifecycle"
+	"github.com/golgimed/mimic/internal/shared/timeline"
 	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
@@ -127,6 +128,10 @@ func createCollectionHandler(store *Store) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, "erro_interno", err.Error())
 			return
 		}
+		timeline.Record(r.Context(), timeline.Event{
+			Type: timeline.ResourceCreated, Provider: Name, ResourceType: "coleta", ResourceID: collection.Chave,
+			Data: map[string]any{"situacao": collection.Situacao},
+		})
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": collection.Chave, "chaveI18n": "sucesso", "mensagem": "Coleta cadastrada com sucesso."})
 	}
 }
@@ -263,7 +268,7 @@ func completeCollectionHandler(runner *lifecycle.Runner, db *sql.DB, webhookURL 
 		}
 		// Matches golgimed's webhookPayload shape (bry_adapter.go): only the
 		// collection key is read from the body, everything else is re-verified.
-		if err := webhooks.Deliver(context.Background(), db, webhooks.DeliverInput{
+		if err := webhooks.Deliver(context.WithoutCancel(r.Context()), db, webhooks.DeliverInput{
 			Provider:     Name,
 			ResourceType: "coleta",
 			ResourceID:   chave,

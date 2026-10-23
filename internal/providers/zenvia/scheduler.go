@@ -3,62 +3,63 @@ package zenvia
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/lifecycle"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
-const advanceJobKind = "zenvia:advance"
+// messageLifecycle is a Zenvia message's status path. ACCEPTED -> SENT ->
+// DELIVERED is the default (first-listed) path; each hop runs statusDelay
+// after the previous one.
+var messageLifecycle = lifecycle.NewMachine("message", map[string][]string{
+	"ACCEPTED": {"SENT"},
+	"SENT":     {"DELIVERED"},
+})
 
-var nextStatus = map[string]string{
-	"ACCEPTED": "SENT",
-	"SENT":     "DELIVERED",
-}
-
-type advanceJobPayload struct {
-	MessageID string `json:"messageId"`
-}
-
-// RegisterScheduler wires the zenvia:advance job handler and returns a
-// ScheduleAdvance closure providers/handlers use to enqueue the next hop
-// (ACCEPTED -> SENT -> DELIVERED) for a freshly created message.
+// RegisterScheduler wires the message lifecycle onto the job scheduler and
+// returns a ScheduleAdvance closure handlers use to start a freshly created
+// (ACCEPTED) message down its status path.
 func RegisterScheduler(sched *scheduler.Scheduler, db *sql.DB, store *Store, faultStore *admin.Store, statusDelay time.Duration) func(messageID string) error {
-	scheduleAdvance := func(messageID string) error {
-		return sched.ScheduleJob(advanceJobKind, advanceJobPayload{MessageID: messageID}, time.Now().Add(statusDelay))
+	var runner *lifecycle.Runner
+	scheduleNext := func(messageID, from string) error {
+		next, ok := messageLifecycle.Next(from)
+		if !ok {
+			return nil
+		}
+		return runner.Schedule(lifecycle.Transition{ID: messageID, From: from, To: next, After: statusDelay})
 	}
 
-	sched.RegisterJobHandler(advanceJobKind, func(ctx context.Context, raw json.RawMessage) error {
-		return handleAdvanceJob(ctx, raw, db, store, faultStore, scheduleAdvance)
-	})
+	current := func(_ context.Context, id string) (string, bool, error) {
+		message, err := store.GetMessage(id)
+		if err != nil || message == nil {
+			return "", false, err
+		}
+		return message.Status, true, nil
+	}
+	apply := func(ctx context.Context, t lifecycle.Transition) error {
+		if err := advanceMessage(ctx, db, store, faultStore, t); err != nil {
+			return err
+		}
+		return scheduleNext(t.ID, t.To)
+	}
+	runner = lifecycle.NewRunner(Name, messageLifecycle, sched, current, apply)
 
-	return scheduleAdvance
+	return func(messageID string) error { return scheduleNext(messageID, "ACCEPTED") }
 }
 
-// handleAdvanceJob advances one message to its next status (ACCEPTED ->
-// SENT -> DELIVERED), notifies every matching subscription, then
-// self-schedules the following hop if there is one.
-func handleAdvanceJob(ctx context.Context, raw json.RawMessage, db *sql.DB, store *Store, faultStore *admin.Store, scheduleAdvance func(string) error) error {
-	var payload advanceJobPayload
-	if err := json.Unmarshal(raw, &payload); err != nil {
+// advanceMessage persists one status hop and notifies every matching
+// subscription with a MESSAGE_STATUS event.
+func advanceMessage(ctx context.Context, db *sql.DB, store *Store, faultStore *admin.Store, t lifecycle.Transition) error {
+	if err := store.UpdateMessageStatus(t.ID, t.To); err != nil {
 		return err
 	}
-
-	message, err := store.GetMessage(payload.MessageID)
+	message, err := store.GetMessage(t.ID)
 	if err != nil || message == nil {
-		return err
-	}
-
-	next, ok := nextStatus[message.Status]
-	if !ok {
-		return nil
-	}
-
-	if err := store.UpdateMessageStatus(payload.MessageID, next); err != nil {
 		return err
 	}
 
@@ -66,15 +67,10 @@ func handleAdvanceJob(ctx context.Context, raw json.RawMessage, db *sql.DB, stor
 	if err != nil {
 		return err
 	}
-
 	for _, sub := range subscriptions {
-		if err := notifySubscription(ctx, db, faultStore, sub, message, next); err != nil {
+		if err := notifySubscription(ctx, db, faultStore, sub, message, t.To); err != nil {
 			return err
 		}
-	}
-
-	if _, hasNext := nextStatus[next]; hasNext {
-		return scheduleAdvance(payload.MessageID)
 	}
 	return nil
 }

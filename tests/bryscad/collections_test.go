@@ -60,3 +60,43 @@ func TestCollectionsRequireBearerToken(t *testing.T) {
 		t.Errorf("sucesso = %v", body["sucesso"])
 	}
 }
+
+func createCollection(t *testing.T, app *testutil.App) string {
+	t.Helper()
+	create := app.Do(t, "POST", "/bry-scad/coletas/cadastrar", bearer, map[string]any{
+		"nome":          "Contrato",
+		"participantes": []map[string]any{{"email": "signer@example.test", "assinante": true}},
+	})
+	var created map[string]any
+	testutil.DecodeJSON(t, create, &created)
+	return created["chaveWorkflow"].(string)
+}
+
+func TestCollectionTransitionsAreGuarded(t *testing.T) {
+	app := testutil.New(t, 0)
+
+	cases := []struct{ first, second string }{
+		{"cancelar", "rejeitar"},
+		{"rejeitar", "concluir"},
+		{"concluir", "cancelar"},
+	}
+	for _, tc := range cases {
+		chave := createCollection(t, app)
+		if rec := app.Do(t, "POST", "/bry-scad/coletas/"+chave+"/"+tc.first, bearer, nil); rec.Code != 200 {
+			t.Fatalf("%s status = %d: %s", tc.first, rec.Code, rec.Body.String())
+		}
+		rec := app.Do(t, "POST", "/bry-scad/coletas/"+chave+"/"+tc.second, bearer, nil)
+		if rec.Code != 409 {
+			t.Fatalf("%s after %s: status = %d, want 409: %s", tc.second, tc.first, rec.Code, rec.Body.String())
+		}
+		var body map[string]any
+		testutil.DecodeJSON(t, rec, &body)
+		if body["chaveI18n"] != "coleta_situacao_invalida" {
+			t.Errorf("chaveI18n = %v", body["chaveI18n"])
+		}
+	}
+
+	if rec := app.Do(t, "POST", "/bry-scad/coletas/missing/cancelar", bearer, nil); rec.Code != 404 {
+		t.Fatalf("unknown collection: status = %d, want 404", rec.Code)
+	}
+}

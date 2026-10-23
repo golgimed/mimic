@@ -34,6 +34,7 @@ func requireBearer(next http.Handler) http.Handler {
 }
 
 func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, db *sql.DB, webhookURL string) {
+	runner := newCollectionRunner(store)
 	// Webhooks (v1 and v2).
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/method", webhookMethodsHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/user-data", collectionHandler())
@@ -86,10 +87,10 @@ func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, d
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/grupos/{id}", collectionHandler())
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/estender-data-limite", successHandler())
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/reenviar-email", successHandler())
-	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/cancelar", transitionCollectionHandler(store, "CANCELADO"))
-	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/rejeitar", transitionCollectionHandler(store, "REJEITADA"))
+	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/cancelar", transitionCollectionHandler(runner, "CANCELADO"))
+	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/rejeitar", transitionCollectionHandler(runner, "REJEITADA"))
 	// Mimic-only test helper — see completeCollectionHandler doc comment.
-	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/concluir", completeCollectionHandler(store, db, webhookURL))
+	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/{chave}/concluir", completeCollectionHandler(runner, db, webhookURL))
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/documentos", collectionHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/documento/{chave}", downloadHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/{chave}/documentos-assinados", signedDocumentsListHandler(store))

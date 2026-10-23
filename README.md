@@ -196,6 +196,25 @@ curl "http://localhost:3000/admin/timeline?request_id=<X-Mimic-Request-ID>"
 
 In the dashboard, click a request ID in any timeline.
 
+## Simulations and seeds
+
+Every simulated request runs inside a **simulation**, which owns a seed. Every random decision Mimic makes in it — fault `probability` rolls, `delayDistribution` latency samples, generated ids and fake values for persisted OpenAPI resources — draws from a stream derived from that seed. The same requests, in the same order, under the same seed and configuration therefore behave the same way, including in the scheduled jobs and webhooks they cause.
+
+```bash
+# Create a simulation (omit "seed" to have one generated and returned)
+curl -X POST http://localhost:3000/admin/simulations -d '{"seed": 847291}'
+# → {"id":"sim_…","seed":847291,…}
+
+# Run requests in it
+curl http://localhost:3000/zenvia/subscriptions -H "X-API-TOKEN: t" -H "X-Mimic-Simulation: sim_…"
+```
+
+- Select a simulation per request with `X-Mimic-Simulation`. Without it, the request runs in its own fresh *implicit* simulation with a generated seed. Every response reports the active simulation in `X-Mimic-Simulation-ID` and `X-Mimic-Seed`, so a failure seen once can be re-run under the same seed.
+- An unknown `X-Mimic-Simulation` is rejected with `400 UNKNOWN_SIMULATION`.
+- `GET /admin/simulations` lists explicit simulations (`?implicit=true` includes implicit ones), and `GET /admin/simulations/{id}` shows one. `GET /admin/timeline?simulation_id=…` shows everything that happened in one.
+- A scheduled job runs in the simulation of the request that scheduled it.
+- Values that stay non-deterministic: provider-assigned UUIDs such as Zenvia message ids, BRy collection keys and webhook event ids, plus wall-clock timestamps. They identify resources rather than drive behavior.
+
 ## Fault injection
 
 Simulate failures without touching code:

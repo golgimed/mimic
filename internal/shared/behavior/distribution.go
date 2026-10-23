@@ -2,7 +2,7 @@ package behavior
 
 import (
 	"encoding/json"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 )
 
@@ -24,16 +24,16 @@ type Distribution struct {
 	StdDev float64          `json:"stdDevMs,omitempty"`
 }
 
-// Sample returns a duration for one call. Negative results (possible with
-// normal sampling) are clamped to 0 — there's no such thing as negative
-// latency.
-func (d Distribution) Sample() time.Duration {
+// Sample returns a duration for one call, drawing on r (the caller's
+// simulation-seeded stream). Negative results (possible with normal
+// sampling) are clamped to 0 — there's no such thing as negative latency.
+func (d Distribution) Sample(r *rand.Rand) time.Duration {
 	var ms float64
 	switch d.Kind {
 	case DistUniform:
-		ms = d.MinMS + rand.Float64()*(d.MaxMS-d.MinMS) //NOSONAR -- simulated latency jitter, not security-sensitive
+		ms = d.MinMS + r.Float64()*(d.MaxMS-d.MinMS) //NOSONAR -- simulated latency jitter, not security-sensitive
 	case DistNormal:
-		ms = rand.NormFloat64()*d.StdDev + d.MeanMS //NOSONAR -- simulated latency jitter, not security-sensitive
+		ms = r.NormFloat64()*d.StdDev + d.MeanMS //NOSONAR -- simulated latency jitter, not security-sensitive
 	default: // DistFixed or unrecognized
 		ms = d.MS
 	}

@@ -8,7 +8,8 @@ import (
 	"strconv"
 
 	"github.com/brianvoe/gofakeit/v7"
-	"github.com/google/uuid"
+
+	"github.com/golgimed/mimic/internal/shared/sim"
 )
 
 const errNotFound = "not found"
@@ -64,9 +65,10 @@ func (route Route) createHandler(store *Store) http.HandlerFunc {
 			http.Error(w, "invalid JSON body: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		id := resourceID(body, route.Plan.Schema)
+		f := sim.Faker(r.Context(), "openapi:create:"+route.SpecName+"/"+route.ResourceType)
+		id := resourceID(body, route.Plan.Schema, f)
 		body["id"] = id
-		fillMissingFields(body, route.Plan.Schema)
+		fillMissingFields(body, route.Plan.Schema, f)
 
 		res, err := store.Create(route.SpecName, route.ResourceType, id, body)
 		if err != nil {
@@ -169,7 +171,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // integer -> random int) — it must round-trip through the path template on
 // later requests. Convention: the JSON field is always named "id",
 // independent of whatever the spec calls the path parameter (e.g. "petId").
-func resourceID(body map[string]any, respSchema *schema) string {
+func resourceID(body map[string]any, respSchema *schema, f *gofakeit.Faker) string {
 	if v, ok := body["id"]; ok {
 		switch t := v.(type) {
 		case string:
@@ -182,25 +184,25 @@ func resourceID(body map[string]any, respSchema *schema) string {
 	}
 	if respSchema != nil {
 		if idSchema, ok := respSchema.Properties["id"]; ok && idSchema.Type == "integer" {
-			return strconv.Itoa(gofakeit.Number(1, 1_000_000))
+			return strconv.Itoa(f.Number(1, 1_000_000))
 		}
 	}
-	return uuid.NewString()
+	return f.UUID()
 }
 
 // fillMissingFields fills any schema-declared property the client didn't
 // supply in the request body with a realistic fake value (server-assigned
-// fields like createdAt/status on Create). Deliberately not seeded — this
-// is genuinely new data for a genuinely new resource, same as zenvia's own
-// uuid.NewString() ids; see seededFaker's doc comment for why that's fine.
-func fillMissingFields(body map[string]any, s *schema) {
+// fields like createdAt/status on Create). f draws from the request's
+// simulation seed, so a replayed simulation creates the same resources.
+func fillMissingFields(body map[string]any, s *schema, f *gofakeit.Faker) {
 	if s == nil || s.Type != "object" {
 		return
 	}
-	for name, prop := range s.Properties {
+	// Sorted, so f's draw order (and therefore the values) is stable.
+	for _, name := range sortedKeys(s.Properties) {
 		if _, exists := body[name]; exists {
 			continue
 		}
-		body[name] = generateFromSchema(prop, gofakeit.GlobalFaker)
+		body[name] = generateFromSchema(s.Properties[name], f)
 	}
 }

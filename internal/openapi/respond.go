@@ -43,10 +43,9 @@ func (p ResponsePlan) handler() http.HandlerFunc {
 // keep returning the same generated body across repeated requests and
 // across process restarts, since nothing anchors it to real state — that's
 // what CLAUDE.md's "deterministic behavior" rule requires here. Persisted
-// CRUD resources don't need this: once created, the stored row is the
-// source of truth, and new resources getting fresh random values (ids,
-// timestamps) on each Create is correct REST behavior, not a determinism
-// violation — it already matches how zenvia's uuid.NewString() works.
+// CRUD creates instead draw from the request's simulation seed
+// (sim.Faker), so each new resource gets fresh values that are still
+// reproducible for a given seed.
 func seededFaker(key string) *gofakeit.Faker {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(key))

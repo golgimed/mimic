@@ -8,7 +8,7 @@ import (
 
 func TestSampleFixed(t *testing.T) {
 	d := Distribution{Kind: DistFixed, MS: 100}
-	if got := d.Sample(); got != 100*time.Millisecond {
+	if got := d.Sample(r); got != 100*time.Millisecond {
 		t.Fatalf("expected 100ms, got %v", got)
 	}
 }
@@ -16,7 +16,7 @@ func TestSampleFixed(t *testing.T) {
 func TestSampleUniformBounds(t *testing.T) {
 	d := Distribution{Kind: DistUniform, MinMS: 50, MaxMS: 60}
 	for i := 0; i < 1000; i++ {
-		got := d.Sample()
+		got := d.Sample(r)
 		if got < 50*time.Millisecond || got >= 60*time.Millisecond+time.Millisecond {
 			t.Fatalf("sample %v out of [50,60]ms bounds", got)
 		}
@@ -28,7 +28,7 @@ func TestSampleNormalMean(t *testing.T) {
 	const n = 20000
 	var sum float64
 	for i := 0; i < n; i++ {
-		sum += float64(d.Sample()) / float64(time.Millisecond)
+		sum += float64(d.Sample(r)) / float64(time.Millisecond)
 	}
 	mean := sum / n
 	if math.Abs(mean-100) > 3 {
@@ -38,7 +38,7 @@ func TestSampleNormalMean(t *testing.T) {
 
 func TestSampleNormalClampsNegative(t *testing.T) {
 	d := Distribution{Kind: DistNormal, MeanMS: -1000, StdDev: 1}
-	if got := d.Sample(); got < 0 {
+	if got := d.Sample(r); got < 0 {
 		t.Fatalf("expected non-negative duration, got %v", got)
 	}
 }

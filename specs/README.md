@@ -93,7 +93,10 @@ When persistence is on for a route:
   `createdAt`) is filled with a realistic fake value. The resource's `id` is
   whatever the client supplied under `"id"`, or a freshly generated one
   (this is always the JSON field name, regardless of what the spec calls
-  the path parameter).
+  the path parameter). Generated ids and fake values draw from the
+  request's simulation seed, so the same requests under the same seed
+  create the same resources (see the root README's "Simulations and
+  seeds").
 - `GET` (list) always returns a raw JSON array of stored resources —
   it does not attempt to reproduce a declared response envelope (e.g.
   `{"pets": [...]}`).

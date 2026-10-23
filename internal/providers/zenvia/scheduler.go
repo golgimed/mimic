@@ -84,7 +84,7 @@ func notifySubscription(ctx context.Context, db *sql.DB, faultStore *admin.Store
 
 	eventPayload := statusEventPayload(sub, message, next)
 
-	webhookFault, err := faultStore.ConsumeMatchingFault(Name, "webhook")
+	webhookFault, err := faultStore.ConsumeMatchingFault(ctx, Name, "webhook")
 	if err != nil {
 		return err
 	}

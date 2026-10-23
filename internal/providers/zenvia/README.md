@@ -40,7 +40,7 @@ curl http://localhost:3000/zenvia/subscriptions \
   -d '{"eventType":"MESSAGE_STATUS","webhook":{"url":"https://your-app/webhooks/zenvia"},"criteria":{"channel":"sms"}}'
 ```
 
-Delay between status transitions is controlled by `ZENVIA_STATUS_DELAY_MS` (default `2000`).
+Delay between status transitions is controlled by `ZENVIA_STATUS_DELAY_MS` (default `2000`). Each hop is an explicit `internal/shared/lifecycle` transition run by the job scheduler (job kind `lifecycle:zenvia:message`), so pending hops are visible in the `jobs` table.
 
 ## Known limitations
 

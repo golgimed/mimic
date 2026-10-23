@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/golgimed/mimic/internal/shared/httpx"
+	"github.com/golgimed/mimic/internal/shared/lifecycle"
 	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
@@ -161,18 +162,14 @@ func getCollectionHandler(store *Store) http.HandlerFunc {
 	}
 }
 
-func transitionCollectionHandler(store *Store, situacao string) http.HandlerFunc {
+func transitionCollectionHandler(runner *lifecycle.Runner, situacao string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		collection, err := store.TransitionCollection(r.PathValue("chave"), situacao)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "erro_interno", err.Error())
+		chave := r.PathValue("chave")
+		if err := runner.Apply(r.Context(), lifecycle.Transition{ID: chave, To: situacao}); err != nil {
+			writeTransitionError(w, err)
 			return
 		}
-		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": collection.Chave, "chaveI18n": "sucesso", "mensagem": "Coleta atualizada com sucesso."})
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": chave, "chaveI18n": "sucesso", "mensagem": "Coleta atualizada com sucesso."})
 	}
 }
 
@@ -252,19 +249,14 @@ func signedDocumentsListHandler(store *Store) http.HandlerFunc {
 // provider — calls back to golgimed's webhook so ParseWebhook's authenticated
 // re-verification (GET /coletas/{chave}, /participantes, /historico,
 // /documentos-assinados) finds a genuinely concluded collection.
-func completeCollectionHandler(store *Store, db *sql.DB, webhookURL string) http.HandlerFunc {
+func completeCollectionHandler(runner *lifecycle.Runner, db *sql.DB, webhookURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		chave := r.PathValue("chave")
-		collection, err := store.CompleteCollection(chave)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "erro_interno", err.Error())
+		if err := runner.Apply(r.Context(), lifecycle.Transition{ID: chave, To: "CONCLUIDO"}); err != nil {
+			writeTransitionError(w, err)
 			return
 		}
-		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": collection.Chave, "chaveI18n": "sucesso", "mensagem": "Coleta concluída com sucesso."})
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": chave, "chaveI18n": "sucesso", "mensagem": "Coleta concluída com sucesso."})
 
 		if webhookURL == "" {
 			return

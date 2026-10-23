@@ -95,6 +95,7 @@ internal/
         auth/
         faults/
         behavior/         # probability + latency-distribution primitives
+        lifecycle/        # explicit state machines + scheduled transitions
         httpx/             # shared JSON response helpers
         scheduler/
         storage/

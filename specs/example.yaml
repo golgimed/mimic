@@ -29,15 +29,14 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  name:
-                    type: string
-                  species:
-                    type: string
+                $ref: "#/components/schemas/Pet"
   /pets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
     get:
       operationId: getPet
       summary: Get a pet by id
@@ -47,14 +46,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  name:
-                    type: string
-                  species:
-                    type: string
+                $ref: "#/components/schemas/Pet"
         "404":
           description: Pet not found
     put:
@@ -66,17 +58,21 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  name:
-                    type: string
-                  species:
-                    type: string
+                $ref: "#/components/schemas/Pet"
     delete:
       operationId: deletePet
       summary: Delete a pet
       responses:
         "204":
           description: Deleted
+components:
+  schemas:
+    Pet:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string

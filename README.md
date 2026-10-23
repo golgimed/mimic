@@ -228,13 +228,13 @@ Integration tests spin up the app in-process (`net/http/httptest`) against an in
 
 ## Limitations
 
-- **OpenAPI parsing is intentionally minimal.** The adapter understands `paths`, operations, and inline `schema`/`example`/`examples` — it does not resolve `$ref`, `oneOf`, `allOf`, or `anyOf`. A spec using any of these logs a warning at boot and the affected schemas fall back to a stub/empty body rather than failing to load. Most real-world specs use `$ref` for shared/component schemas, so expect stubs there until this is addressed (see Roadmap).
+- **OpenAPI specs are parsed with [kin-openapi](https://github.com/getkin/kin-openapi).** Local `$ref`s (`#/components/...`) are resolved at load time; external (file/URL) `$ref`s are rejected so a spec never triggers network or filesystem access. An unresolvable `$ref` or unparseable document fails the load with an error naming the file; OpenAPI schema-conformance problems (e.g. a missing response `description`) are logged as warnings and the spec still loads. `oneOf`/`allOf`/`anyOf` are not yet used by response generation (see Roadmap).
 - **CRUD persistence only covers single-level resources.** A collection route with zero path parameters (`/pets`) or an item route with exactly one trailing path parameter (`/pets/{id}`) is inferred as CRUD. Nested resources (`/pets/{id}/vaccinations`) or routes with multiple path parameters keep static example/stub behavior regardless of `MIMIC_OPENAPI_PERSIST`. See [specs/README.md](specs/README.md).
 - Mimic is not a production system and doesn't try to reproduce every detail of a real provider — see [CLAUDE.md](CLAUDE.md) for the design philosophy behind that tradeoff.
 
 ## Roadmap
 
-- Replace the hand-rolled OpenAPI parser with a real parsing library (e.g. `kin-openapi` or `libopenapi`) to add `$ref`/`oneOf`/`allOf`/`anyOf` support.
+- Use `oneOf`/`allOf`/`anyOf` in schema-driven response generation.
 - Everything else is driven by whatever new provider or simulation need comes up next — see [CLAUDE.md](CLAUDE.md)'s "Adding a new provider" section if you want to contribute one.
 
 ## Contributing

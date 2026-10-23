@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Signatures
+  version: "1.0"
+paths:
+  /signatures/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SignatureID'
+    get:
+      operationId: getSignature
+      responses:
+        '200':
+          $ref: '#/components/responses/SignatureResponse'
+  /signers:
+    get:
+      operationId: listSigners
+      responses:
+        '200':
+          description: signers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Signer'
+components:
+  parameters:
+    SignatureID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string}
+  responses:
+    SignatureResponse:
+      description: a signature
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Signature'
+  schemas:
+    Signature:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        status:
+          type: string
+          enum: [PENDING, SIGNED, REJECTED]
+        signer:
+          $ref: '#/components/schemas/Signer'
+    Signer:
+      type: object
+      properties:
+        name: {type: string}
+        email: {type: string, format: email}

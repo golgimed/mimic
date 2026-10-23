@@ -85,7 +85,7 @@ func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store
 func logSpecWarnings(log *slog.Logger, specs []*openapi.LoadedSpec) {
 	for _, spec := range specs {
 		for _, w := range spec.Warnings {
-			log.Warn("openapi spec uses unsupported construct", "spec", spec.Path, "warning", w)
+			log.Warn("openapi spec validation warning", "spec", spec.Path, "warning", w)
 		}
 	}
 }

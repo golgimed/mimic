@@ -28,6 +28,18 @@ func fromKinDoc(k *openapi3.T) (doc, error) {
 	if ok {
 		d.MimicPersist = &persist
 	}
+	var validation string
+	ok, err = decodeExtension(k.Extensions, "x-mimic-validation", &validation)
+	if err != nil {
+		return doc{}, err
+	}
+	if ok {
+		mode, err := ParseValidationMode(validation)
+		if err != nil {
+			return doc{}, fmt.Errorf("x-mimic-validation: %w", err)
+		}
+		d.MimicValidation = &mode
+	}
 
 	if k.Paths == nil {
 		return d, nil
@@ -43,6 +55,13 @@ func fromKinDoc(k *openapi3.T) (doc, error) {
 			if err != nil {
 				return doc{}, fmt.Errorf("%s %s: %w", strings.ToUpper(method), path, err)
 			}
+			var pathParams []string
+			for _, p := range op.Parameters {
+				if p.In == openapi3.ParameterInPath {
+					pathParams = append(pathParams, p.Name)
+				}
+			}
+			op.validate = newRequestValidator(k, path, strings.ToUpper(method), item, kop, pathParams)
 			ops[strings.ToLower(method)] = op
 		}
 		d.Paths[path] = ops

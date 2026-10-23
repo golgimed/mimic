@@ -69,6 +69,10 @@ func runAndCapture(t *testing.T, bin, workdir string, args ...string) (output st
 			collected.WriteString(line)
 			collected.WriteString("\n")
 			if strings.Contains(line, "listening on") {
+				// stdout (banner) and stderr (slog) are read on separate
+				// goroutines, so earlier stderr lines can still be in
+				// flight; drain briefly before killing.
+				drainLines(lines, &collected, 200*time.Millisecond)
 				_ = cmd.Process.Kill()
 				<-done
 				return collected.String(), false, nil
@@ -79,6 +83,19 @@ func runAndCapture(t *testing.T, bin, workdir string, args ...string) (output st
 			_ = cmd.Process.Kill()
 			<-done
 			return collected.String(), false, nil
+		}
+	}
+}
+
+// drainLines appends lines to collected until none arrive for quiet.
+func drainLines(lines <-chan string, collected *strings.Builder, quiet time.Duration) {
+	for {
+		select {
+		case line := <-lines:
+			collected.WriteString(line)
+			collected.WriteString("\n")
+		case <-time.After(quiet):
+			return
 		}
 	}
 }

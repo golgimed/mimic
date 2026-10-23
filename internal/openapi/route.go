@@ -33,6 +33,11 @@ type Route struct {
 	// Behavior is this route's x-mimic-behavior declaration, if any (see
 	// behavior.go). Seeded into fault_config at boot by providers.go.
 	Behavior *behaviorSpec
+
+	// Validation is the effective request-validation mode for this route's
+	// spec; validate checks a request against the operation's contract.
+	Validation ValidationMode
+	validate   requestValidator
 }
 
 // ResponsePlan describes how to build the mocked response body for a route.
@@ -49,8 +54,10 @@ type ResponsePlan struct {
 // or with each other (mirrors how existing providers use Name as their mux
 // prefix). persist is the effective persistence setting for this spec
 // (spec.Persist override, or the global MIMIC_OPENAPI_PERSIST default),
-// applied to every CRUD-shaped route.
-func BuildRoutes(spec *LoadedSpec, prefix string, persist bool) []Route {
+// applied to every CRUD-shaped route. validation is the effective
+// request-validation mode (spec.Validation override, or the global
+// MIMIC_OPENAPI_VALIDATION default).
+func BuildRoutes(spec *LoadedSpec, prefix string, persist bool, validation ValidationMode) []Route {
 	var routes []Route
 
 	for _, path := range sortedKeys(spec.doc.Paths) {
@@ -61,7 +68,7 @@ func BuildRoutes(spec *LoadedSpec, prefix string, persist bool) []Route {
 			if !httpMethods[strings.ToLower(m)] {
 				continue
 			}
-			routes = append(routes, buildRoute(spec, prefix, path, m, methods[m], resourceType, idParam, isItem, supported, persist))
+			routes = append(routes, buildRoute(spec, prefix, path, m, methods[m], resourceType, idParam, isItem, supported, persist, validation))
 		}
 	}
 
@@ -80,7 +87,7 @@ func sortedKeys[V any](m map[string]V) []string {
 // buildRoute converts one spec operation into a Route, filling in the
 // inferred REST shape (resourceType/idParam/Op/Persist) only when supported
 // is true — non-CRUD-shaped routes are served straight from Plan.
-func buildRoute(spec *LoadedSpec, prefix, path, m string, op operation, resourceType, idParam string, isItem, supported, persist bool) Route {
+func buildRoute(spec *LoadedSpec, prefix, path, m string, op operation, resourceType, idParam string, isItem, supported, persist bool, validation ValidationMode) Route {
 	method := strings.ToUpper(m)
 	routePath := "/" + strings.Trim(prefix, "/") + path
 
@@ -90,12 +97,14 @@ func buildRoute(spec *LoadedSpec, prefix, path, m string, op operation, resource
 	}
 
 	route := Route{
-		Method:   method,
-		Path:     routePath,
-		Plan:     plan,
-		Source:   spec.Path,
-		SpecName: prefix,
-		Behavior: op.Behavior,
+		Method:     method,
+		Path:       routePath,
+		Plan:       plan,
+		Source:     spec.Path,
+		SpecName:   prefix,
+		Behavior:   op.Behavior,
+		Validation: validation,
+		validate:   op.validate,
 	}
 	if supported {
 		route.ResourceType = resourceType

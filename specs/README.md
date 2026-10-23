@@ -28,6 +28,35 @@ structure as a starting point for your own specs.
   don't prevent serving (e.g. a response without `description`) are only
   logged as warnings.
 
+## Request validation
+
+Every spec-mocked request is checked against its operation's contract:
+path/query/header parameters (presence, basic type, enum) and the request
+body (presence, content type, JSON structure, required properties, types,
+enums — `$ref`s resolved). Security requirements are not checked, since
+spec routes don't enforce auth.
+
+- `MIMIC_OPENAPI_VALIDATION=permissive` (default) — invalid requests are
+  still served; the response carries an `X-Mimic-Validation-Warning`
+  header summarizing the violations.
+- `MIMIC_OPENAPI_VALIDATION=strict` — invalid requests get `400` before any
+  simulated behavior (persistence, generated bodies) runs:
+
+  ```json
+  {"error": {"code": "VALIDATION_ERROR", "issues": [
+    {"in": "body", "name": "signer.email", "reason": "property \"email\" is missing"},
+    {"in": "query", "name": "mode", "reason": "value is not one of the allowed values [\"sync\",\"async\"]"}
+  ]}}
+  ```
+
+  This envelope is Mimic's own, not the real provider's error format.
+- Set `x-mimic-validation: strict` (or `permissive`) at a spec's document
+  root to override the global mode for that spec.
+- Fault injection (`x-mimic-behavior`, `/admin/faults`) is applied before
+  validation, as a gateway-level failure would be.
+- Body content types without a JSON-compatible decoder (e.g. XML) are
+  reported as violations; prefer `permissive` for such specs.
+
 ## Persistence
 
 By default, spec-mocked routes are stateless: every response is either the

@@ -99,6 +99,9 @@ type Config struct {
 	DefaultDelay      time.Duration
 	ZenviaStatusDelay time.Duration
 	OpenAPIPersist    bool
+	// OpenAPIValidation is MIMIC_OPENAPI_VALIDATION: "permissive" (default)
+	// or "strict". Specs can override it via x-mimic-validation.
+	OpenAPIValidation string
 	// BryScadWebhookURL is where the bry-scad provider's Mimic-only /concluir
 	// test helper calls back after simulating collection completion, mirroring
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
@@ -141,6 +144,11 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 
+	openAPIValidation := strings.ToLower(getEnv("MIMIC_OPENAPI_VALIDATION", "permissive"))
+	if openAPIValidation != "permissive" && openAPIValidation != "strict" {
+		return Config{}, fmt.Errorf("MIMIC_OPENAPI_VALIDATION must be permissive or strict, got %q", openAPIValidation)
+	}
+
 	return Config{
 		Port:              port,
 		LogLevel:          logLevel,
@@ -149,6 +157,7 @@ func Load() (Config, error) {
 		DefaultDelay:      time.Duration(defaultDelayMS) * time.Millisecond,
 		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
 		OpenAPIPersist:    openAPIPersist,
+		OpenAPIValidation: openAPIValidation,
 		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
 		CRMDoctors:        getEnvList("MIMIC_CRM_DOCTORS"),
 		CRMAccessKey:      getEnv("MIMIC_CRM_ACCESS_KEY", "mimiccrm"),

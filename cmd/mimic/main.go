@@ -126,10 +126,11 @@ func registerOpenAPIIfConfigured(reg *registry.Registry, db *sql.DB, faultStore 
 		return
 	}
 	specCount, routeCount, err := providers.RegisterOpenAPI(reg, db, faultStore, providers.OpenAPIOptions{
-		SpecDir:        specDir,
-		SpecGlobs:      oa.globs,
-		ConflictMode:   openapi.ConflictMode(oa.conflict),
-		PersistDefault: cfg.OpenAPIPersist,
+		SpecDir:           specDir,
+		SpecGlobs:         oa.globs,
+		ConflictMode:      openapi.ConflictMode(oa.conflict),
+		PersistDefault:    cfg.OpenAPIPersist,
+		ValidationDefault: openapi.ValidationMode(cfg.OpenAPIValidation),
 	}, log)
 	if err != nil {
 		log.Error("failed to register openapi adapter", "error", err)

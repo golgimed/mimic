@@ -76,7 +76,7 @@ func specsByPrefix(specs []SpecMeta) map[string]SpecMeta {
 
 func registerSpecRoutes(mux *http.ServeMux, name string, routes []Route, faultStore *admin.Store, store *Store) {
 	for _, route := range routes {
-		wrapped := admin.RequestFaultHook(faultStore, name, route.Path)(route.handler(store))
+		wrapped := admin.RequestFaultHook(faultStore, name, route.Path)(withValidation(route, route.handler(store)))
 		mux.Handle(route.Method+" "+route.Path, wrapped)
 	}
 }

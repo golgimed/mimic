@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/registry"
+	"github.com/golgimed/mimic/internal/shared/correlation"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
@@ -33,9 +34,9 @@ func LogDropped(ctx context.Context, db *sql.DB, input DeliverInput) error {
 	}
 	recordDelivery(ctx, timeline.WebhookDropped, input, nil)
 	_, err = db.Exec(
-		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code)
-		 VALUES (?, ?, ?, ?, ?, 'dropped', NULL)`,
-		input.Provider, input.ResourceType, input.ResourceID, input.URL, string(payloadJSON),
+		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code, request_id)
+		 VALUES (?, ?, ?, ?, ?, 'dropped', NULL, ?)`,
+		input.Provider, input.ResourceType, input.ResourceID, input.URL, string(payloadJSON), correlation.RequestID(ctx),
 	)
 	return err
 }
@@ -102,6 +103,9 @@ func Deliver(ctx context.Context, db *sql.DB, input DeliverInput) error {
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, input.URL, bytes.NewReader(payloadJSON))
 	if err == nil {
 		req.Header.Set("Content-Type", "application/json")
+		if id := correlation.RequestID(ctx); id != "" {
+			req.Header.Set(correlation.Header, id)
+		}
 		for k, v := range input.Headers {
 			req.Header.Set(k, v)
 		}
@@ -126,9 +130,9 @@ func Deliver(ctx context.Context, db *sql.DB, input DeliverInput) error {
 	recordDelivery(ctx, typ, input, responseCode)
 
 	if _, err := db.Exec(
-		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		input.Provider, input.ResourceType, input.ResourceID, input.URL, string(payloadJSON), status, responseCode,
+		`INSERT INTO webhook_deliveries (provider, resource_type, resource_id, url, payload_json, status, response_code, request_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		input.Provider, input.ResourceType, input.ResourceID, input.URL, string(payloadJSON), status, responseCode, correlation.RequestID(ctx),
 	); err != nil {
 		return fmt.Errorf("record webhook delivery: %w", err)
 	}

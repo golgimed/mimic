@@ -57,10 +57,11 @@ func WithCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Mimic-Request-ID, X-Mimic-Validation-Warning, X-Mimic-Warning")
 
 		if r.Method == http.MethodOptions {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-TOKEN")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-TOKEN, X-Request-ID, Authorization")
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

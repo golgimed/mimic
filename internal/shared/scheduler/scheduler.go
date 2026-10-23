@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golgimed/mimic/internal/shared/correlation"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
@@ -45,8 +46,8 @@ func (s *Scheduler) ScheduleJob(ctx context.Context, kind string, payload any, r
 	}
 	runAtStr := runAt.UTC().Format(time.RFC3339Nano)
 	res, err := s.db.ExecContext(context.WithoutCancel(ctx),
-		"INSERT INTO jobs (kind, payload_json, run_at, status) VALUES (?, ?, ?, 'pending')",
-		kind, string(payloadJSON), runAtStr,
+		"INSERT INTO jobs (kind, payload_json, run_at, status, request_id) VALUES (?, ?, ?, 'pending', ?)",
+		kind, string(payloadJSON), runAtStr, correlation.RequestID(ctx),
 	)
 	if err != nil {
 		return err
@@ -61,6 +62,7 @@ func (s *Scheduler) ScheduleJob(ctx context.Context, kind string, payload any, r
 type jobRow struct {
 	id          int64
 	payloadJSON string
+	requestID   string
 }
 
 type due struct {
@@ -85,7 +87,7 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT id, kind, payload_json FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
+		"SELECT id, kind, payload_json, request_id FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
 		now,
 	)
 	if err != nil {
@@ -96,7 +98,7 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	var jobs []due
 	for rows.Next() {
 		var j due
-		if err := rows.Scan(&j.id, &j.kind, &j.payloadJSON); err != nil {
+		if err := rows.Scan(&j.id, &j.kind, &j.payloadJSON, &j.requestID); err != nil {
 			return nil, err
 		}
 		jobs = append(jobs, j)
@@ -107,15 +109,20 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 // processJob marks j processing, dispatches it to its registered handler (if
 // any), and marks it done/failed. Errors are logged, not returned — one
 // job's failure never stops Tick from processing the rest.
+//
+// The job runs with the correlation ID of the request that scheduled it,
+// so everything it records (state changes, webhooks, follow-up jobs)
+// stays traceable to that request.
 func (s *Scheduler) processJob(ctx context.Context, j due) {
-	ctx = timeline.WithRecorder(ctx, s.rec)
+	ctx = correlation.WithRequestID(timeline.WithRecorder(ctx, s.rec), j.requestID)
+	log := slog.With("job_id", j.id, "kind", j.kind, "request_id", j.requestID)
 	jobEvent := func(typ timeline.Type, data map[string]any) {
 		data["kind"] = j.kind
 		timeline.Record(ctx, timeline.Event{Type: typ, JobID: j.id, Data: data})
 	}
 
 	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'processing' WHERE id = ?", j.id); err != nil {
-		slog.Error("scheduler: failed to mark job processing", "job_id", j.id, "kind", j.kind, "error", err)
+		log.Error("scheduler: failed to mark job processing", "error", err)
 		return
 	}
 
@@ -132,14 +139,14 @@ func (s *Scheduler) processJob(ctx context.Context, j due) {
 	if handlerErr != nil {
 		jobEvent(timeline.JobFailed, map[string]any{"error": handlerErr.Error()})
 		if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'failed' WHERE id = ?", j.id); err != nil {
-			slog.Error("scheduler: failed to mark job failed", "job_id", j.id, "kind", j.kind, "handler_error", handlerErr, "error", err)
+			log.Error("scheduler: failed to mark job failed", "handler_error", handlerErr, "error", err)
 		} else {
-			slog.Error("scheduler: job handler failed", "job_id", j.id, "kind", j.kind, "error", handlerErr)
+			log.Error("scheduler: job handler failed", "error", handlerErr)
 		}
 		return
 	}
 	jobEvent(timeline.JobCompleted, map[string]any{})
 	if _, err := s.db.ExecContext(ctx, "UPDATE jobs SET status = 'done' WHERE id = ?", j.id); err != nil {
-		slog.Error("scheduler: failed to mark job done", "job_id", j.id, "kind", j.kind, "error", err)
+		log.Error("scheduler: failed to mark job done", "error", err)
 	}
 }

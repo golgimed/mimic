@@ -15,6 +15,15 @@ structure as a starting point for your own specs.
   `-spec-dir <path>` or repeated `-spec <glob>` flags.
 - Loaded once at boot; each spec's version (`info.version`) and content
   checksum are visible on the dashboard under the `openapi` provider.
+- Specs are parsed with [kin-openapi](https://github.com/getkin/kin-openapi).
+  Local `$ref`s into `#/components/...` (schemas, parameters, request
+  bodies, responses) are resolved, including nested and recursive schema
+  references. External `$ref`s (another file or a URL) are rejected: a
+  spec must be self-contained.
+- A spec that can't be parsed, or has an unresolvable `$ref`, fails the
+  boot with an error naming the file. OpenAPI conformance problems that
+  don't prevent serving (e.g. a response without `description`) are only
+  logged as warnings.
 
 ## Persistence
 

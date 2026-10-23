@@ -6,6 +6,7 @@
 package openapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -15,66 +16,79 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"gopkg.in/yaml.v3"
 )
 
-// doc is the minimal subset of an OpenAPI 3.x document this adapter
-// understands: paths, operations, and their responses' examples/schemas.
-// Anything else in the spec (security schemes, components other than
-// inline schemas, servers, etc.) is ignored.
-//
-// This is intentionally frozen at OpenAPI 3.0-shaped semantics pending a
-// timeboxed spike into an actual parsing library (kin-openapi vs.
-// pb33f/libopenapi) for proper 3.1 / JSON Schema 2020-12 and $ref support.
-// Don't grow doc/schema further without that spike — see the OpenAPI
-// providers plan (parsing-library issue) for the trade-offs already
-// considered.
+// doc is this adapter's internal model of an OpenAPI 3.x document: paths,
+// operations, their parameters/request bodies, and their responses'
+// examples/schemas. It is built from a kin-openapi document (see
+// fromKinDoc in translate.go) so kin-openapi types never leave this file
+// and translate.go — the rest of the package, and the rest of Mimic, only
+// see these structs.
 type doc struct {
-	Info struct {
-		Title   string `yaml:"title"`
-		Version string `yaml:"version"`
-	} `yaml:"info"`
+	Title   string
+	Version string
 	// MimicName overrides the auto-derived (slugified title) route prefix
 	// for this spec. Optional; standard OpenAPI vendor-extension escape
 	// hatch, used to resolve prefix collisions without a sidecar file.
-	MimicName string `yaml:"x-mimic-name"`
+	MimicName string
 	// MimicPersist overrides MIMIC_OPENAPI_PERSIST for this spec's
 	// CRUD-shaped routes. Optional; nil means "use the global default".
-	MimicPersist *bool                           `yaml:"x-mimic-persist"`
-	Paths        map[string]map[string]operation `yaml:"paths"`
+	MimicPersist *bool
+	Paths        map[string]map[string]operation
 }
 
 type operation struct {
-	OperationID string              `yaml:"operationId"`
-	Responses   map[string]response `yaml:"responses"`
+	OperationID string
+	Parameters  []parameter
+	RequestBody *requestBody
+	Responses   map[string]response
 	// Behavior is the x-mimic-behavior vendor extension: a declarative,
 	// per-operation alternative to configuring a fault via PUT /admin/faults
 	// after the fact. Optional; nil means no spec-declared behavior for this
 	// operation. See behavior.go for how it's seeded into fault_config.
-	Behavior *behaviorSpec `yaml:"x-mimic-behavior"`
+	Behavior *behaviorSpec
+}
+
+// parameter is one path/query/header/cookie parameter, with any $ref
+// already resolved.
+type parameter struct {
+	Name     string
+	In       string
+	Required bool
+	Schema   *schema
+}
+
+type requestBody struct {
+	Required bool
+	Content  map[string]mediaType
 }
 
 type response struct {
-	Content map[string]mediaType `yaml:"content"`
+	Content map[string]mediaType
 }
 
 type mediaType struct {
-	Schema   *schema            `yaml:"schema"`
-	Example  any                `yaml:"example"`
-	Examples map[string]example `yaml:"examples"`
+	Schema   *schema
+	Example  any
+	Examples map[string]example
 }
 
 type example struct {
-	Value any `yaml:"value"`
+	Value any
 }
 
+// schema is the subset of JSON Schema the response generator understands.
+// $ref is resolved at load time, so a schema graph may be cyclic for
+// recursive definitions — consumers must guard against unbounded descent.
 type schema struct {
-	Type       string             `yaml:"type"`
-	Format     string             `yaml:"format"`
-	Properties map[string]*schema `yaml:"properties"`
-	Items      *schema            `yaml:"items"`
-	Example    any                `yaml:"example"`
-	Enum       []any              `yaml:"enum"`
+	Type       string
+	Format     string
+	Properties map[string]*schema
+	Items      *schema
+	Example    any
+	Enum       []any
 }
 
 var httpMethods = map[string]bool{
@@ -89,53 +103,11 @@ type LoadedSpec struct {
 	Checksum  string // sha256 of the raw spec file, hex-encoded
 	MimicName string // x-mimic-name override, empty if unset
 	Persist   *bool  // x-mimic-persist override, nil if unset
-	// Warnings lists constructs this adapter found in the spec but doesn't
-	// understand (see unsupportedConstructKeys) — affected schemas silently
-	// fall back to stub/empty bodies unless the caller surfaces this.
+	// Warnings lists problems found while validating the spec against the
+	// OpenAPI 3.x schema. They don't stop the spec from loading (a sloppy
+	// but usable spec still yields routes), but are logged at boot.
 	Warnings []string
 	doc      doc
-}
-
-// unsupportedConstructKeys are OpenAPI/JSON Schema keys this adapter's doc
-// struct has no field for (see the comment on doc above) and therefore
-// silently drops via yaml.v3's unknown-field-ignore behavior.
-var unsupportedConstructKeys = []string{"$ref", "oneOf", "allOf", "anyOf"}
-
-// findUnsupportedConstructs walks a generically-decoded spec looking for any
-// key in unsupportedConstructKeys, returning the distinct ones found.
-func findUnsupportedConstructs(node any) []string {
-	found := make(map[string]bool)
-	walkConstructs(node, found)
-
-	keys := make([]string, 0, len(found))
-	for _, k := range unsupportedConstructKeys {
-		if found[k] {
-			keys = append(keys, k)
-		}
-	}
-	return keys
-}
-
-func walkConstructs(n any, found map[string]bool) {
-	switch v := n.(type) {
-	case map[string]any:
-		recordUnsupportedKeys(v, found)
-		for _, child := range v {
-			walkConstructs(child, found)
-		}
-	case []any:
-		for _, child := range v {
-			walkConstructs(child, found)
-		}
-	}
-}
-
-func recordUnsupportedKeys(v map[string]any, found map[string]bool) {
-	for _, key := range unsupportedConstructKeys {
-		if _, ok := v[key]; ok {
-			found[key] = true
-		}
-	}
 }
 
 // Discover recursively finds spec files under dir (if set) and unions in
@@ -234,41 +206,62 @@ func discoverGlob(glob string) ([]string, error) {
 	return out, nil
 }
 
-// Load parses a single spec file (YAML or JSON — encoding/json is a subset
-// of YAML, so one decoder handles both).
+// Load parses a single spec file (YAML or JSON) with kin-openapi, resolving
+// local $refs. Structural errors (unparseable document, unresolvable $ref)
+// fail the load; OpenAPI schema-validation findings are kept as Warnings.
 func Load(path string) (*LoadedSpec, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
 
-	var d doc
-	if err := yaml.Unmarshal(raw, &d); err != nil {
+	loader := openapi3.NewLoader()
+	// External (file/URL) $refs are intentionally unsupported: a spec must
+	// be self-contained so loading never touches the network or other files.
+	loader.IsExternalRefsAllowed = false
+	kdoc, err := loader.LoadFromData(raw)
+	if err != nil {
 		return nil, fmt.Errorf("parse spec %q: %w", path, err)
 	}
 
-	var generic any
-	if err := yaml.Unmarshal(raw, &generic); err != nil {
-		return nil, fmt.Errorf("parse spec %q: %w", path, err)
-	}
 	var warnings []string
-	for _, construct := range findUnsupportedConstructs(generic) {
-		warnings = append(warnings, fmt.Sprintf(
-			"spec uses %q, which this adapter does not resolve — affected schemas fall back to stub/empty bodies",
-			construct))
+	if err := kdoc.Validate(context.Background(), openapi3.DisableExamplesValidation()); err != nil {
+		warnings = append(warnings, "spec does not fully conform to OpenAPI 3.x: "+err.Error())
+	}
+
+	d, err := fromKinDoc(kdoc)
+	if err != nil {
+		return nil, fmt.Errorf("translate spec %q: %w", path, err)
 	}
 
 	sum := sha256.Sum256(raw)
 	return &LoadedSpec{
 		Path:      path,
-		Title:     d.Info.Title,
-		Version:   d.Info.Version,
+		Title:     d.Title,
+		Version:   d.Version,
 		Checksum:  hex.EncodeToString(sum[:]),
 		MimicName: d.MimicName,
 		Persist:   d.MimicPersist,
 		Warnings:  warnings,
 		doc:       d,
 	}, nil
+}
+
+// decodeExtension re-decodes a kin-openapi vendor-extension value (already
+// generically decoded) into out, via YAML so out's yaml tags apply.
+func decodeExtension(ext map[string]any, key string, out any) (bool, error) {
+	v, ok := ext[key]
+	if !ok || v == nil {
+		return false, nil
+	}
+	raw, err := yaml.Marshal(v)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", key, err)
+	}
+	if err := yaml.Unmarshal(raw, out); err != nil {
+		return false, fmt.Errorf("%s: %w", key, err)
+	}
+	return true, nil
 }
 
 // LoadAll discovers and parses every spec under dir and/or matching globs.

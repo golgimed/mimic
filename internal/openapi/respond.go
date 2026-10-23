@@ -60,9 +60,18 @@ func seededFaker(key string) *gofakeit.Faker {
 // generated values — stay stable regardless of Go's randomized map
 // iteration order.
 func generateFromSchema(s *schema, f *gofakeit.Faker) any {
-	if s == nil {
+	return generate(s, f, map[*schema]bool{})
+}
+
+// generate is generateFromSchema with the set of schemas on the current
+// descent path: a recursive schema (resolved from a self-referencing $ref)
+// stops at its first repetition, yielding null there instead of looping.
+func generate(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) any {
+	if s == nil || onPath[s] {
 		return nil
 	}
+	onPath[s] = true
+	defer delete(onPath, s)
 	if len(s.Enum) > 0 {
 		return s.Enum[0]
 	}
@@ -77,14 +86,18 @@ func generateFromSchema(s *schema, f *gofakeit.Faker) any {
 
 		out := make(map[string]any, len(s.Properties))
 		for _, name := range names {
-			out[name] = generateFromSchema(s.Properties[name], f)
+			out[name] = generate(s.Properties[name], f, onPath)
 		}
 		return out
 	case "array":
 		if s.Items == nil {
 			return []any{}
 		}
-		return []any{generateFromSchema(s.Items, f)}
+		item := generate(s.Items, f, onPath)
+		if item == nil {
+			return []any{}
+		}
+		return []any{item}
 	case "string":
 		return fakeString(s.Format, f)
 	case "integer":

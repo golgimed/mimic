@@ -41,6 +41,9 @@ type OpenAPIOptions struct {
 	SpecGlobs      []string
 	ConflictMode   openapi.ConflictMode
 	PersistDefault bool
+	// ValidationDefault is the MIMIC_OPENAPI_VALIDATION mode, unless a spec
+	// overrides it via x-mimic-validation. Empty means permissive.
+	ValidationDefault openapi.ValidationMode
 }
 
 // RegisterOpenAPI loads every spec found under opts.SpecDir and/or matching
@@ -64,7 +67,7 @@ func RegisterOpenAPI(reg *registry.Registry, db *sql.DB, faultStore *admin.Store
 	}
 	logSpecWarnings(log, specs)
 
-	specRoutes, metas, err := buildSpecRoutes(reg, specs, opts.PersistDefault)
+	specRoutes, metas, err := buildSpecRoutes(reg, specs, opts.PersistDefault, opts.ValidationDefault)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -92,7 +95,7 @@ func logSpecWarnings(log *slog.Logger, specs []*openapi.LoadedSpec) {
 
 // buildSpecRoutes resolves each spec's route prefix (erroring on collision
 // with a hand-written provider or another spec) and builds its routes.
-func buildSpecRoutes(reg *registry.Registry, specs []*openapi.LoadedSpec, persistDefault bool) ([][]openapi.Route, []openapi.SpecMeta, error) {
+func buildSpecRoutes(reg *registry.Registry, specs []*openapi.LoadedSpec, persistDefault bool, validationDefault openapi.ValidationMode) ([][]openapi.Route, []openapi.SpecMeta, error) {
 	reserved := make(map[string]string)
 	for _, p := range reg.All() {
 		reserved[p.Name] = p.Name
@@ -111,7 +114,14 @@ func buildSpecRoutes(reg *registry.Registry, specs []*openapi.LoadedSpec, persis
 		if spec.Persist != nil {
 			persist = *spec.Persist
 		}
-		specRoutes = append(specRoutes, openapi.BuildRoutes(spec, prefix, persist))
+		validation := validationDefault
+		if validation == "" {
+			validation = openapi.ValidationPermissive
+		}
+		if spec.Validation != nil {
+			validation = *spec.Validation
+		}
+		specRoutes = append(specRoutes, openapi.BuildRoutes(spec, prefix, persist, validation))
 		metas = append(metas, openapi.SpecMeta{
 			Prefix:   prefix,
 			Path:     spec.Path,

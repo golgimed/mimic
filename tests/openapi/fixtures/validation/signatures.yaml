@@ -1,0 +1,54 @@
+openapi: 3.0.3
+info:
+  title: Validated
+  version: "1.0"
+paths:
+  /signatures:
+    post:
+      operationId: createSignature
+      parameters:
+        - name: X-Tenant
+          in: header
+          required: true
+          schema: {type: string}
+        - name: mode
+          in: query
+          required: true
+          schema: {type: string, enum: [sync, async]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignatureRequest'}
+      responses:
+        '201':
+          description: created
+          content:
+            application/json:
+              example: {id: "sig_1", status: PENDING}
+  /signatures/{id}:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer}
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              example: {id: 1}
+components:
+  schemas:
+    SignatureRequest:
+      type: object
+      required: [document, signer]
+      properties:
+        document: {type: string}
+        signer:
+          type: object
+          required: [email]
+          properties:
+            email: {type: string}
+        priority: {type: string, enum: [low, high]}

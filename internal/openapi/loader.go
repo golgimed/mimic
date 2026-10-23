@@ -36,7 +36,10 @@ type doc struct {
 	// MimicPersist overrides MIMIC_OPENAPI_PERSIST for this spec's
 	// CRUD-shaped routes. Optional; nil means "use the global default".
 	MimicPersist *bool
-	Paths        map[string]map[string]operation
+	// MimicValidation overrides MIMIC_OPENAPI_VALIDATION for this spec.
+	// Optional; nil means "use the global default".
+	MimicValidation *ValidationMode
+	Paths           map[string]map[string]operation
 }
 
 type operation struct {
@@ -49,6 +52,8 @@ type operation struct {
 	// after the fact. Optional; nil means no spec-declared behavior for this
 	// operation. See behavior.go for how it's seeded into fault_config.
 	Behavior *behaviorSpec
+	// validate checks a request against this operation's contract.
+	validate requestValidator
 }
 
 // parameter is one path/query/header/cookie parameter, with any $ref
@@ -106,6 +111,8 @@ type LoadedSpec struct {
 	Checksum  string // sha256 of the raw spec file, hex-encoded
 	MimicName string // x-mimic-name override, empty if unset
 	Persist   *bool  // x-mimic-persist override, nil if unset
+	// Validation is the x-mimic-validation override, nil if unset.
+	Validation *ValidationMode
 	// Warnings lists problems found while validating the spec against the
 	// OpenAPI 3.x schema. They don't stop the spec from loading (a sloppy
 	// but usable spec still yields routes), but are logged at boot.
@@ -239,14 +246,15 @@ func Load(path string) (*LoadedSpec, error) {
 
 	sum := sha256.Sum256(raw)
 	return &LoadedSpec{
-		Path:      path,
-		Title:     d.Title,
-		Version:   d.Version,
-		Checksum:  hex.EncodeToString(sum[:]),
-		MimicName: d.MimicName,
-		Persist:   d.MimicPersist,
-		Warnings:  warnings,
-		doc:       d,
+		Path:       path,
+		Title:      d.Title,
+		Version:    d.Version,
+		Checksum:   hex.EncodeToString(sum[:]),
+		MimicName:  d.MimicName,
+		Persist:    d.MimicPersist,
+		Validation: d.MimicValidation,
+		Warnings:   warnings,
+		doc:        d,
 	}, nil
 }
 

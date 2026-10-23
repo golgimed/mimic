@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  title: Strict Spec
+  version: "1.0"
+x-mimic-validation: strict
+paths:
+  /items:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+      responses:
+        '201':
+          description: created

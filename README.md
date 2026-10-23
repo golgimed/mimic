@@ -166,7 +166,7 @@ With no flags, `serve` looks for a `specs/` directory and loads every spec found
 | `-spec <glob>` | Load spec files matching a glob pattern (repeatable) |
 | `-conflict <mode>` | Route-prefix conflict handling across specs: `strict` (default), `merge`, or `priority` |
 
-See [specs/README.md](specs/README.md) for spec discovery, route-prefix derivation (`x-mimic-name`), and CRUD persistence (`MIMIC_OPENAPI_PERSIST`, `x-mimic-persist`).
+See [specs/README.md](specs/README.md) for spec discovery, route-prefix derivation (`x-mimic-name`), CRUD persistence (`MIMIC_OPENAPI_PERSIST`, `x-mimic-persist`), and request validation (`MIMIC_OPENAPI_VALIDATION`, `x-mimic-validation`).
 
 ## Usage
 
@@ -200,6 +200,7 @@ Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload`, `webhook_dropped
 | `SCHEDULER_INTERVAL_MS` | `1000` | Background job poll interval |
 | `MIMIC_PROVIDERS` | *(all registered)* | Comma-separated list of provider names to enable, e.g. `zenvia,integraicp` |
 | `MIMIC_OPENAPI_PERSIST` | `false` | Enable real CRUD persistence for spec-mocked routes (see [specs/README.md](specs/README.md)) |
+| `MIMIC_OPENAPI_VALIDATION` | `permissive` | `strict` rejects requests that violate a spec's contract with 400; `permissive` serves them with an `X-Mimic-Validation-Warning` header (see [specs/README.md](specs/README.md)) |
 
 Provider-specific variables (e.g. `ZENVIA_STATUS_DELAY_MS`) are documented in each provider's README.
 

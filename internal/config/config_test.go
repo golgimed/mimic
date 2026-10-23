@@ -56,6 +56,22 @@ func TestLoadInvalidBool(t *testing.T) {
 	}
 }
 
+func TestLoadOpenAPIValidation(t *testing.T) {
+	t.Setenv("MIMIC_OPENAPI_VALIDATION", "Strict")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.OpenAPIValidation != "strict" {
+		t.Fatalf("OpenAPIValidation = %q, want strict", cfg.OpenAPIValidation)
+	}
+
+	t.Setenv("MIMIC_OPENAPI_VALIDATION", "lenient")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for invalid MIMIC_OPENAPI_VALIDATION")
+	}
+}
+
 func TestLoadEnabledProviders(t *testing.T) {
 	t.Setenv("MIMIC_PROVIDERS", " zenvia, integraicp ,,")
 	cfg, err := Load()

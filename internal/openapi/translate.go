@@ -163,5 +163,52 @@ func (t *schemaTranslator) translate(ref *openapi3.SchemaRef) *schema {
 		}
 	}
 	s.Items = t.translate(k.Items)
+
+	for _, ref := range k.AllOf {
+		mergeAllOf(s, t.translate(ref))
+	}
+	for _, list := range []openapi3.SchemaRefs{k.OneOf, k.AnyOf} {
+		for _, ref := range list {
+			if v := t.translate(ref); v != nil {
+				s.Variants = append(s.Variants, v)
+			}
+		}
+	}
+	if s.Type == "" && len(s.Properties) > 0 {
+		s.Type = "object"
+	}
 	return s
+}
+
+// mergeAllOf folds one allOf member into s. Fields s already declares win;
+// properties are unioned. A member still being translated (a recursive
+// allOf) contributes whatever it has so far.
+func mergeAllOf(s, m *schema) {
+	if m == nil || m == s {
+		return
+	}
+	if s.Type == "" {
+		s.Type = m.Type
+	}
+	if s.Format == "" {
+		s.Format = m.Format
+	}
+	if s.Items == nil {
+		s.Items = m.Items
+	}
+	if s.Example == nil {
+		s.Example = m.Example
+	}
+	if len(s.Enum) == 0 {
+		s.Enum = m.Enum
+	}
+	if len(m.Properties) > 0 && s.Properties == nil {
+		s.Properties = make(map[string]*schema, len(m.Properties))
+	}
+	for name, p := range m.Properties {
+		if _, ok := s.Properties[name]; !ok {
+			s.Properties[name] = p
+		}
+	}
+	s.Variants = append(s.Variants, m.Variants...)
 }

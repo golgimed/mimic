@@ -82,6 +82,8 @@ type example struct {
 // schema is the subset of JSON Schema the response generator understands.
 // $ref is resolved at load time, so a schema graph may be cyclic for
 // recursive definitions — consumers must guard against unbounded descent.
+// allOf members are merged into the schema itself at translation time;
+// oneOf/anyOf alternatives are kept in Variants.
 type schema struct {
 	Type       string
 	Format     string
@@ -89,6 +91,7 @@ type schema struct {
 	Items      *schema
 	Example    any
 	Enum       []any
+	Variants   []*schema
 }
 
 var httpMethods = map[string]bool{

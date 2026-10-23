@@ -228,13 +228,12 @@ Integration tests spin up the app in-process (`net/http/httptest`) against an in
 
 ## Limitations
 
-- **OpenAPI specs are parsed with [kin-openapi](https://github.com/getkin/kin-openapi).** Local `$ref`s (`#/components/...`) are resolved at load time; external (file/URL) `$ref`s are rejected so a spec never triggers network or filesystem access. An unresolvable `$ref` or unparseable document fails the load with an error naming the file; OpenAPI schema-conformance problems (e.g. a missing response `description`) are logged as warnings and the spec still loads. `oneOf`/`allOf`/`anyOf` are not yet used by response generation (see Roadmap).
+- **OpenAPI specs are parsed with [kin-openapi](https://github.com/getkin/kin-openapi).** Local `$ref`s (`#/components/...`) are resolved at load time; external (file/URL) `$ref`s are rejected so a spec never triggers network or filesystem access. An unresolvable `$ref` or unparseable document fails the load with an error naming the file; OpenAPI schema-conformance problems (e.g. a missing response `description`) are logged as warnings and the spec still loads. Schema-generated bodies merge `allOf` members and use the first `oneOf`/`anyOf` alternative.
 - **CRUD persistence only covers single-level resources.** A collection route with zero path parameters (`/pets`) or an item route with exactly one trailing path parameter (`/pets/{id}`) is inferred as CRUD. Nested resources (`/pets/{id}/vaccinations`) or routes with multiple path parameters keep static example/stub behavior regardless of `MIMIC_OPENAPI_PERSIST`. See [specs/README.md](specs/README.md).
 - Mimic is not a production system and doesn't try to reproduce every detail of a real provider — see [CLAUDE.md](CLAUDE.md) for the design philosophy behind that tradeoff.
 
 ## Roadmap
 
-- Use `oneOf`/`allOf`/`anyOf` in schema-driven response generation.
 - Everything else is driven by whatever new provider or simulation need comes up next — see [CLAUDE.md](CLAUDE.md)'s "Adding a new provider" section if you want to contribute one.
 
 ## Contributing

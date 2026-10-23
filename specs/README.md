@@ -20,6 +20,9 @@ structure as a starting point for your own specs.
   bodies, responses) are resolved, including nested and recursive schema
   references. External `$ref`s (another file or a URL) are rejected: a
   spec must be self-contained.
+- Schema-generated bodies merge `allOf` members and use the first
+  `oneOf`/`anyOf` alternative; a recursive schema stops (as `null` or an
+  empty array) at its first repetition.
 - A spec that can't be parsed, or has an unresolvable `$ref`, fails the
   boot with an error naming the file. OpenAPI conformance problems that
   don't prevent serving (e.g. a response without `description`) are only

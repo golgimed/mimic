@@ -55,7 +55,8 @@ func seededFaker(key string) *gofakeit.Faker {
 
 // generateFromSchema builds a JSON instance from a JSON Schema fragment
 // using f for values. It's intentionally simple: one representative value
-// per type/format, no combinators (oneOf/allOf/anyOf). Object properties are
+// per type/format. allOf is already merged into s at load time; for
+// oneOf/anyOf the first alternative is used. Object properties are
 // visited in sorted order so f's call sequence — and therefore the
 // generated values — stay stable regardless of Go's randomized map
 // iteration order.
@@ -75,6 +76,9 @@ func generate(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) any {
 	if len(s.Enum) > 0 {
 		return s.Enum[0]
 	}
+	if len(s.Variants) > 0 && s.Type == "" {
+		return generate(s.Variants[0], f, onPath)
+	}
 
 	switch s.Type {
 	case "object":
@@ -87,6 +91,17 @@ func generate(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) any {
 		out := make(map[string]any, len(s.Properties))
 		for _, name := range names {
 			out[name] = generate(s.Properties[name], f, onPath)
+		}
+		// Shared properties plus a oneOf/anyOf: add the first
+		// alternative's own properties.
+		if len(s.Variants) > 0 {
+			if extra, ok := generate(s.Variants[0], f, onPath).(map[string]any); ok {
+				for k, v := range extra {
+					if _, exists := out[k]; !exists {
+						out[k] = v
+					}
+				}
+			}
 		}
 		return out
 	case "array":

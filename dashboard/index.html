@@ -75,6 +75,7 @@ function renderTimeline(events) {
       <td class="pr-3 py-1 text-slate-500 whitespace-nowrap">${escapeHTML(new Date(e.ts).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3, hour12: false}))}</td>
       <td class="pr-3 py-1 font-medium whitespace-nowrap">${escapeHTML(e.type)}</td>
       <td class="pr-3 py-1 text-slate-500 whitespace-nowrap">${escapeHTML([e.provider, e.resourceType, e.resourceId].filter(Boolean).join(' / '))}${e.jobId ? ' job #' + e.jobId : ''}</td>
+      <td class="pr-3 py-1 whitespace-nowrap">${e.requestId ? `<a href="#" class="req text-blue-600 hover:underline" data-req="${escapeHTML(e.requestId)}" title="Show everything this request caused">${escapeHTML(e.requestId.slice(0, 8))}</a>` : ''}</td>
       <td class="py-1 text-slate-600 break-all">${e.data ? escapeHTML(JSON.stringify(e.data)) : ''}</td>
     </tr>`).join('');
   return `<table class="w-full text-xs">${rows}</table>`;
@@ -86,14 +87,25 @@ async function fetchTimeline(query) {
   return content;
 }
 
-document.getElementById('show-timeline').addEventListener('click', async () => {
+async function showTimeline(requestId) {
   selectedKey = null;
-  const events = await fetchTimeline('?limit=200');
+  const events = await fetchTimeline(requestId ? `?request_id=${encodeURIComponent(requestId)}` : '?limit=200');
+  const title = requestId ? `Request ${escapeHTML(requestId)} (${events.length} events)` : `Timeline (latest ${events.length})`;
   document.getElementById('detail').innerHTML = `
-    <h2 class="text-base font-semibold mb-3">Timeline (latest ${events.length})</h2>
+    <h2 class="text-base font-semibold mb-3">${title}</h2>
     ${renderTimeline(events)}
   `;
   loadItems();
+}
+
+document.getElementById('show-timeline').addEventListener('click', () => showTimeline());
+
+// Clicking a request ID in any timeline shows everything that request caused.
+document.getElementById('detail').addEventListener('click', e => {
+  const link = e.target.closest('a.req');
+  if (!link) return;
+  e.preventDefault();
+  showTimeline(link.dataset.req);
 });
 
 async function selectItem(provider, id) {

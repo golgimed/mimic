@@ -180,11 +180,21 @@ The "Flush" button (`POST /admin/flush`) wipes every table's data (items, faults
 
 ## Timeline
 
-Every simulated interaction is recorded as an ordered event log: `RequestReceived`, `ResponseReturned`, `ResourceCreated`, `StateChanged`, `JobScheduled`/`JobStarted`/`JobCompleted`/`JobFailed`, `WebhookDelivered`/`WebhookFailed`/`WebhookDropped`, and `FaultApplied`. Read it with `GET /admin/timeline` (filters: `provider`, `resource_id`, `limit` — default 500, newest kept, returned oldest first), from the dashboard's **Timeline** button, or per resource in the dashboard's item detail. Control-plane calls (`/admin`, `/dashboard`, `/health`) are not recorded, and Flush clears the timeline.
+Every simulated interaction is recorded as an ordered event log: `RequestReceived`, `ResponseReturned`, `ResourceCreated`, `StateChanged`, `JobScheduled`/`JobStarted`/`JobCompleted`/`JobFailed`, `WebhookDelivered`/`WebhookFailed`/`WebhookDropped`, and `FaultApplied`. Read it with `GET /admin/timeline` (filters: `request_id`, `provider`, `resource_id`, `limit` — default 500, newest kept, returned oldest first), from the dashboard's **Timeline** button, or per resource in the dashboard's item detail. Control-plane calls (`/admin`, `/dashboard`, `/health`) are not recorded, and Flush clears the timeline.
 
 ```bash
 curl "http://localhost:3000/admin/timeline?provider=zenvia&resource_id=<message-id>"
 ```
+
+### Correlation IDs
+
+Every simulated request gets a request ID — the client's `X-Request-ID` if it is 1–128 visible ASCII characters, otherwise a fresh UUID — returned in the `X-Mimic-Request-ID` response header. The ID follows everything the request causes, including asynchronous work: scheduled jobs (stored on the `jobs` row and restored when the job runs), state transitions, webhook deliveries (stored on `webhook_deliveries` and sent as an `X-Mimic-Request-ID` header on the outgoing webhook), timeline events and scheduler logs (`request_id` attribute). To see everything one request caused:
+
+```bash
+curl "http://localhost:3000/admin/timeline?request_id=<X-Mimic-Request-ID>"
+```
+
+In the dashboard, click a request ID in any timeline.
 
 ## Fault injection
 

@@ -111,11 +111,11 @@ func handleFlush(w http.ResponseWriter, db *sql.DB) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// handleTimeline serves GET /admin/timeline?provider=&resource_id=&limit=,
+// handleTimeline serves GET /admin/timeline?request_id=&provider=&resource_id=&limit=,
 // oldest event first.
 func handleTimeline(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	q := r.URL.Query()
-	f := timeline.Filter{Provider: q.Get("provider"), ResourceID: q.Get("resource_id")}
+	f := timeline.Filter{RequestID: q.Get("request_id"), Provider: q.Get("provider"), ResourceID: q.Get("resource_id")}
 	if l := q.Get("limit"); l != "" {
 		n, err := strconv.Atoi(l)
 		if err != nil || n <= 0 {

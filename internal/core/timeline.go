@@ -5,14 +5,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golgimed/mimic/internal/shared/correlation"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
-// withTimeline puts rec into each request's context and records the
-// request and its response on the simulation timeline.
+// withTimeline gives each request a correlation ID (the client's
+// X-Request-ID if usable, else a fresh UUID), echoes it as
+// X-Mimic-Request-ID, puts it and rec into the request context, and
+// records the request and its response on the simulation timeline.
 func withTimeline(rec *timeline.Recorder, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := timeline.WithRecorder(r.Context(), rec)
+		requestID := correlation.FromClient(r.Header.Get(correlation.ClientHeader))
+		w.Header().Set(correlation.Header, requestID)
+		ctx := correlation.WithRequestID(timeline.WithRecorder(r.Context(), rec), requestID)
 		r = r.WithContext(ctx)
 		provider, _, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
 		start := time.Now()

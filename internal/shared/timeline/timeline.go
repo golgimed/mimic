@@ -15,6 +15,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/golgimed/mimic/internal/shared/correlation"
 )
 
 // Type is a timeline event type.
@@ -44,6 +46,7 @@ type Event struct {
 	Provider     string         `json:"provider,omitempty"`
 	ResourceType string         `json:"resourceType,omitempty"`
 	ResourceID   string         `json:"resourceId,omitempty"`
+	RequestID    string         `json:"requestId,omitempty"`
 	JobID        int64          `json:"jobId,omitempty"`
 	Data         map[string]any `json:"data,omitempty"`
 }
@@ -68,6 +71,9 @@ func Record(ctx context.Context, ev Event) {
 	if rec == nil {
 		return
 	}
+	if ev.RequestID == "" {
+		ev.RequestID = correlation.RequestID(ctx)
+	}
 	if ev.Time == "" {
 		ev.Time = time.Now().UTC().Format(time.RFC3339Nano)
 	}
@@ -85,9 +91,9 @@ func Record(ctx context.Context, ev Event) {
 		jobID = ev.JobID
 	}
 	if _, err := rec.db.ExecContext(context.WithoutCancel(ctx),
-		`INSERT INTO timeline_events (ts, type, provider, resource_type, resource_id, job_id, data_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		ev.Time, string(ev.Type), ev.Provider, ev.ResourceType, ev.ResourceID, jobID, data,
+		`INSERT INTO timeline_events (ts, type, provider, resource_type, resource_id, request_id, job_id, data_json)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		ev.Time, string(ev.Type), ev.Provider, ev.ResourceType, ev.ResourceID, ev.RequestID, jobID, data,
 	); err != nil {
 		slog.Warn("timeline: record event", "type", ev.Type, "error", err)
 	}
@@ -95,6 +101,7 @@ func Record(ctx context.Context, ev Event) {
 
 // Filter narrows List. Zero fields don't filter.
 type Filter struct {
+	RequestID  string
 	Provider   string
 	ResourceID string
 	Limit      int // default 500
@@ -104,6 +111,10 @@ type Filter struct {
 func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 	var where []string
 	var args []any
+	if f.RequestID != "" {
+		where = append(where, "request_id = ?")
+		args = append(args, f.RequestID)
+	}
 	if f.Provider != "" {
 		where = append(where, "provider = ?")
 		args = append(args, f.Provider)
@@ -116,7 +127,7 @@ func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 	if limit <= 0 {
 		limit = 500
 	}
-	query := `SELECT id, ts, type, provider, resource_type, resource_id, job_id, data_json FROM timeline_events`
+	query := `SELECT id, ts, type, provider, resource_type, resource_id, request_id, job_id, data_json FROM timeline_events`
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -138,7 +149,7 @@ func List(ctx context.Context, db *sql.DB, f Filter) ([]Event, error) {
 			jobID sql.NullInt64
 			data  sql.NullString
 		)
-		if err := rows.Scan(&ev.ID, &ev.Time, &typ, &ev.Provider, &ev.ResourceType, &ev.ResourceID, &jobID, &data); err != nil {
+		if err := rows.Scan(&ev.ID, &ev.Time, &typ, &ev.Provider, &ev.ResourceType, &ev.ResourceID, &ev.RequestID, &jobID, &data); err != nil {
 			return nil, err
 		}
 		ev.Type = Type(typ)

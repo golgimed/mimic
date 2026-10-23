@@ -196,3 +196,90 @@ components:
 		t.Fatalf("children = %#v, want empty array at first recursion", got["children"])
 	}
 }
+
+func TestCombinatorsDriveGeneration(t *testing.T) {
+	path := writeSpec(t, `
+openapi: 3.0.3
+info: {title: Combinators, version: "1"}
+paths:
+  /docs:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Document'}
+  /events:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - {$ref: '#/components/schemas/Signed'}
+                  - {$ref: '#/components/schemas/Rejected'}
+components:
+  schemas:
+    Base:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+    Document:
+      allOf:
+        - {$ref: '#/components/schemas/Base'}
+        - properties:
+            title: {type: string}
+    Signed:
+      type: object
+      properties:
+        signedAt: {type: string, format: date-time}
+    Rejected:
+      type: object
+      properties:
+        reason: {type: string}
+`)
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	gen := func(p string) map[string]any {
+		s := loaded.doc.Paths[p]["get"].Responses["200"].Content["application/json"].Schema
+		out, _ := generateFromSchema(s, seededFaker(p)).(map[string]any)
+		return out
+	}
+
+	doc := gen("/docs")
+	if doc["id"] == nil || doc["title"] == nil {
+		t.Fatalf("allOf not merged: %#v", doc)
+	}
+	ev := gen("/events")
+	if ev["signedAt"] == nil || ev["reason"] != nil {
+		t.Fatalf("oneOf should use first alternative only: %#v", ev)
+	}
+}
+
+func TestLoadRejectsExternalRef(t *testing.T) {
+	path := writeSpec(t, `
+openapi: 3.0.0
+info: {title: External, version: "1"}
+paths:
+  /pets:
+    get:
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema: {$ref: 'other.yaml#/components/schemas/Pet'}
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatal("Load succeeded, want external $ref rejected")
+	}
+	if !strings.Contains(err.Error(), "external reference") {
+		t.Fatalf("error = %v, want it to mention the external reference", err)
+	}
+}

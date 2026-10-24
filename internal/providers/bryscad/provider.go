@@ -2,7 +2,7 @@ package bryscad
 
 import (
 	"database/sql"
-	_ "embed"
+	_ "embed" // enables //go:embed for scenarios.yaml
 	"net/http"
 
 	"github.com/golgimed/mimic/internal/registry"

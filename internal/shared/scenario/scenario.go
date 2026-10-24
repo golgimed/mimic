@@ -110,28 +110,36 @@ func Parse(provider string, raw []byte, validEdge func(resource, from, to string
 		return nil, fmt.Errorf("%s scenarios: %w", provider, err)
 	}
 	for i := range list {
-		s := &list[i]
-		s.Provider = provider
-		if s.Name == "" || s.Description == "" {
-			return nil, fmt.Errorf("%s scenario #%d: name and description are required", provider, i+1)
-		}
-		if (s.Initial == "") != (len(s.Steps) == 0) {
-			return nil, fmt.Errorf("%s scenario %q: initial and transitions go together", provider, s.Name)
-		}
-		if len(s.Steps) > 0 && s.Resource == "" {
-			return nil, fmt.Errorf("%s scenario %q: transitions need a resource", provider, s.Name)
-		}
-		if validEdge != nil {
-			from := s.Initial
-			for _, step := range s.Steps {
-				if !validEdge(s.Resource, from, step.To) {
-					return nil, fmt.Errorf("%s scenario %q: %s -> %s is not an allowed %s transition", provider, s.Name, from, step.To, s.Resource)
-				}
-				from = step.To
-			}
+		list[i].Provider = provider
+		if err := list[i].validate(i, validEdge); err != nil {
+			return nil, err
 		}
 	}
 	return list, nil
+}
+
+// validate checks one parsed scenario (index i, for messages).
+func (s *Scenario) validate(i int, validEdge func(resource, from, to string) bool) error {
+	if s.Name == "" || s.Description == "" {
+		return fmt.Errorf("%s scenario #%d: name and description are required", s.Provider, i+1)
+	}
+	if (s.Initial == "") != (len(s.Steps) == 0) {
+		return fmt.Errorf("%s scenario %q: initial and transitions go together", s.Provider, s.Name)
+	}
+	if len(s.Steps) > 0 && s.Resource == "" {
+		return fmt.Errorf("%s scenario %q: transitions need a resource", s.Provider, s.Name)
+	}
+	if validEdge == nil {
+		return nil
+	}
+	from := s.Initial
+	for _, step := range s.Steps {
+		if !validEdge(s.Resource, from, step.To) {
+			return fmt.Errorf("%s scenario %q: %s -> %s is not an allowed %s transition", s.Provider, s.Name, from, step.To, s.Resource)
+		}
+		from = step.To
+	}
+	return nil
 }
 
 // MustParse is Parse for embedded, compile-time-known YAML.

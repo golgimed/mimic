@@ -2,7 +2,7 @@ package zenvia
 
 import (
 	"database/sql"
-	_ "embed"
+	_ "embed" // enables //go:embed for scenarios.yaml
 	"net/http"
 	"time"
 

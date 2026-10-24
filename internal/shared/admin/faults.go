@@ -48,19 +48,17 @@ func NewStore(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-const faultColumns = `id, provider, route_pattern, fault_kind, fault_value, remaining_uses, created_at, probability, delay_distribution, simulation_id`
-
-// Query strings below concatenate faultColumns at compile time (both are Go
-// constants) — nothing request-derived ever reaches the SQL text; all
-// variable input is passed as bind parameters.
+// Query strings are complete literals (each lists the columns scanFault
+// reads, in order): nothing request-derived ever reaches the SQL text, and
+// all variable input is passed as bind parameters.
 const (
-	selectFaultByID = `SELECT ` + faultColumns + `
+	selectFaultByID = `SELECT id, provider, route_pattern, fault_kind, fault_value, remaining_uses, created_at, probability, delay_distribution, simulation_id
 		FROM fault_config WHERE id = ?`
-	selectAllFaults = `SELECT ` + faultColumns + `
+	selectAllFaults = `SELECT id, provider, route_pattern, fault_kind, fault_value, remaining_uses, created_at, probability, delay_distribution, simulation_id
 		FROM fault_config ORDER BY created_at`
 	// Faults scoped to the request's simulation (scenario faults) win over
 	// global ones; then exact routes over provider-wide ones.
-	selectMatchingFault = `SELECT ` + faultColumns + `
+	selectMatchingFault = `SELECT id, provider, route_pattern, fault_kind, fault_value, remaining_uses, created_at, probability, delay_distribution, simulation_id
 		FROM fault_config
 		WHERE provider = ? AND (route_pattern = ? OR route_pattern IS NULL)
 		  AND (simulation_id = '' OR simulation_id = ?)

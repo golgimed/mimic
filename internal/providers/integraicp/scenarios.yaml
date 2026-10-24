@@ -1,0 +1,7 @@
+# Built-in integraicp scenarios. IntegraICP is simulated statelessly (see
+# README "State model"), so its scenarios are fault-only.
+- name: integraicp-unavailable
+  description: IntegraICP is down; every integraicp request in the simulation gets 503 Service Unavailable.
+  faults:
+    - kind: http_status
+      value: "503"

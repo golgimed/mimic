@@ -7,6 +7,7 @@ import (
 
 	"github.com/golgimed/mimic/internal/shared/admin"
 	"github.com/golgimed/mimic/internal/shared/httpx"
+	"github.com/golgimed/mimic/internal/shared/lifecycle"
 )
 
 const Name = "bry-scad"
@@ -33,8 +34,7 @@ func requireBearer(next http.Handler) http.Handler {
 	})
 }
 
-func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, db *sql.DB, webhookURL string) {
-	runner := newCollectionRunner(store)
+func registerRoutes(mux *http.ServeMux, store *Store, runner *lifecycle.Runner, faultStore *admin.Store, db *sql.DB, webhookURL string) {
 	// Webhooks (v1 and v2).
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/method", webhookMethodsHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/webhook/user-data", collectionHandler())
@@ -48,7 +48,7 @@ func registerRoutes(mux *http.ServeMux, store *Store, faultStore *admin.Store, d
 
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/coletas/cadastrar/checar-permissao", permissionHandler())
 	withMiddleware(mux, faultStore, "GET", "/bry-scad/tipos-assinatura", signatureTypesHandler())
-	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/cadastrar", createCollectionHandler(store))
+	withMiddleware(mux, faultStore, "POST", "/bry-scad/coletas/cadastrar", createCollectionHandler(store, runner))
 
 	// Groups and tags.
 	withMiddleware(mux, faultStore, "POST", "/bry-scad/grupos", successHandler())

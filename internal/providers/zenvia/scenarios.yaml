@@ -1,0 +1,31 @@
+# Built-in zenvia scenarios. Select one per simulation:
+#   POST /admin/simulations {"scenario": "<name>"}
+# Status codes are Zenvia's documented MESSAGE_STATUS codes; a transition
+# without "after" uses ZENVIA_STATUS_DELAY_MS.
+- name: message-delivered
+  resource: message
+  description: A message is sent and then delivered to the recipient's device (Mimic's default path, made explicit).
+  initial: ACCEPTED
+  transitions:
+    - to: SENT
+    - to: DELIVERED
+  webhooks: [MESSAGE_STATUS]
+
+- name: message-not-delivered
+  resource: message
+  description: A message reaches the provider but can't be delivered to the device; the NOT_DELIVERED event carries a cause.
+  initial: ACCEPTED
+  transitions:
+    - to: SENT
+    - to: NOT_DELIVERED
+      meta:
+        description: The provider was unable to deliver the message
+        reason: Unreachable destination
+        details: Simulated by Mimic (scenario message-not-delivered)
+  webhooks: [MESSAGE_STATUS]
+
+- name: zenvia-unavailable
+  description: Zenvia's API is down; every zenvia request in the simulation gets 503 Service Unavailable. Requests outside the simulation are unaffected.
+  faults:
+    - kind: http_status
+      value: "503"

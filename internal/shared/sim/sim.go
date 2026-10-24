@@ -44,6 +44,7 @@ var ErrNotFound = errors.New("simulation not found")
 type Simulation struct {
 	ID        string `json:"id"`
 	Seed      int64  `json:"seed"`
+	Scenario  string `json:"scenario,omitempty"`
 	Implicit  bool   `json:"implicit"`
 	CreatedAt string `json:"createdAt"`
 
@@ -124,8 +125,10 @@ func StoreFor(db *sql.DB) *Store {
 	return s.(*Store)
 }
 
-// Create persists a new simulation. seed 0 means "generate one".
-func (st *Store) Create(ctx context.Context, seed int64, implicit bool) (*Simulation, error) {
+// Create persists a new simulation. seed 0 means "generate one"; scenario
+// may be empty (providers' default behavior). The caller validates the
+// scenario name.
+func (st *Store) Create(ctx context.Context, seed int64, scenario string, implicit bool) (*Simulation, error) {
 	if seed == 0 {
 		seed = NewSeed()
 	}
@@ -135,12 +138,13 @@ func (st *Store) Create(ctx context.Context, seed int64, implicit bool) (*Simula
 	s := &Simulation{
 		ID:        "sim_" + uuid.NewString(),
 		Seed:      seed,
+		Scenario:  scenario,
 		Implicit:  implicit,
 		CreatedAt: clock.Now().Format(time.RFC3339Nano),
 	}
 	if _, err := st.db.ExecContext(context.WithoutCancel(ctx),
-		`INSERT INTO simulations (id, seed, implicit, created_at) VALUES (?, ?, ?, ?)`,
-		s.ID, s.Seed, s.Implicit, s.CreatedAt,
+		`INSERT INTO simulations (id, seed, scenario, implicit, created_at) VALUES (?, ?, ?, ?, ?)`,
+		s.ID, s.Seed, s.Scenario, s.Implicit, s.CreatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -163,8 +167,8 @@ func (st *Store) Get(ctx context.Context, id string) (*Simulation, error) {
 
 	var s Simulation
 	err := st.db.QueryRowContext(ctx,
-		`SELECT id, seed, implicit, created_at FROM simulations WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Seed, &s.Implicit, &s.CreatedAt)
+		`SELECT id, seed, scenario, implicit, created_at FROM simulations WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Seed, &s.Scenario, &s.Implicit, &s.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -188,7 +192,7 @@ func (st *Store) List(ctx context.Context, includeImplicit bool, limit int) ([]*
 	if limit <= 0 {
 		limit = 100
 	}
-	query := `SELECT id, seed, implicit, created_at FROM simulations`
+	query := `SELECT id, seed, scenario, implicit, created_at FROM simulations`
 	if !includeImplicit {
 		query += ` WHERE implicit = 0`
 	}
@@ -201,7 +205,7 @@ func (st *Store) List(ctx context.Context, includeImplicit bool, limit int) ([]*
 	out := []*Simulation{}
 	for rows.Next() {
 		var s Simulation
-		if err := rows.Scan(&s.ID, &s.Seed, &s.Implicit, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Seed, &s.Scenario, &s.Implicit, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, &s)

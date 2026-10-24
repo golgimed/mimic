@@ -100,6 +100,7 @@ internal/
         correlation/      # request IDs propagated through async work
         sim/              # simulations: seeds + deterministic randomness
         clock/            # simulation clock (realtime / accelerated / virtual)
+        scenario/         # declarative provider scenarios (scenarios.yaml)
         httpx/             # shared JSON response helpers
         scheduler/
         storage/

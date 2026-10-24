@@ -1,17 +1,14 @@
 package bryscad
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/golgimed/mimic/internal/shared/httpx"
 	"github.com/golgimed/mimic/internal/shared/lifecycle"
 	"github.com/golgimed/mimic/internal/shared/timeline"
-	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
 // The OpenAPI document declares a number of command and query endpoints whose
@@ -111,7 +108,7 @@ func signatureTypesHandler() http.HandlerFunc {
 	}
 }
 
-func createCollectionHandler(store *Store) http.HandlerFunc {
+func createCollectionHandler(store *Store, runner *lifecycle.Runner) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || len(payload) == 0 {
@@ -132,6 +129,10 @@ func createCollectionHandler(store *Store) http.HandlerFunc {
 			Type: timeline.ResourceCreated, Provider: Name, ResourceType: "coleta", ResourceID: collection.Chave,
 			Data: map[string]any{"situacao": collection.Situacao},
 		})
+		if err := startScenario(r.Context(), runner, collection.Chave); err != nil {
+			writeError(w, http.StatusInternalServerError, "erro_interno", err.Error())
+			return
+		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": collection.Chave, "chaveI18n": "sucesso", "mensagem": "Coleta cadastrada com sucesso."})
 	}
 }
@@ -262,20 +263,6 @@ func completeCollectionHandler(runner *lifecycle.Runner, db *sql.DB, webhookURL 
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{"sucesso": true, "chaveWorkflow": chave, "chaveI18n": "sucesso", "mensagem": "Coleta concluída com sucesso."})
-
-		if webhookURL == "" {
-			return
-		}
-		// Matches golgimed's webhookPayload shape (bry_adapter.go): only the
-		// collection key is read from the body, everything else is re-verified.
-		if err := webhooks.Deliver(context.WithoutCancel(r.Context()), db, webhooks.DeliverInput{
-			Provider:     Name,
-			ResourceType: "coleta",
-			ResourceID:   chave,
-			URL:          webhookURL,
-			Payload:      map[string]any{"payload": map[string]any{"chave": chave}},
-		}); err != nil {
-			slog.Error("bry-scad: deliver completion webhook", "chave", chave, "error", err)
-		}
+		deliverCompletionWebhook(r.Context(), db, webhookURL, chave)
 	}
 }

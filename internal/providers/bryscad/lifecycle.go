@@ -90,7 +90,9 @@ func deliverCompletionWebhook(ctx context.Context, db *sql.DB, webhookURL, chave
 		URL:          webhookURL,
 		Payload:      map[string]any{"payload": map[string]any{"chave": chave}},
 	}); err != nil {
-		slog.Error("bry-scad: deliver completion webhook", "chave", chave, "error", err)
+		// The collection key is client-supplied, so it stays out of the log
+		// line; the timeline's WebhookFailed event carries it.
+		slog.Error("bry-scad: deliver completion webhook", "error", err)
 	}
 }
 

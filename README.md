@@ -215,6 +215,20 @@ curl http://localhost:3000/zenvia/subscriptions -H "X-API-TOKEN: t" -H "X-Mimic-
 - A scheduled job runs in the simulation of the request that scheduled it.
 - Values that stay non-deterministic: provider-assigned UUIDs such as Zenvia message ids, BRy collection keys and webhook event ids, plus wall-clock timestamps. They identify resources rather than drive behavior.
 
+### Replay
+
+Every request a simulation receives is recorded: method, path and query, the headers a provider can read, the body (up to 1 MiB), the response status, and its simulated-time offset. `POST /admin/simulations/{id}/replay` re-runs it:
+
+```bash
+curl -X POST http://localhost:3000/admin/simulations/sim_…/replay
+# → {"simulation":{"id":"sim_new…","replayedFrom":"sim_…",…},"matched":41,"total":41,"timing":"…","requests":[…]}
+```
+
+- A replay creates a **new** simulation with the original's seed, scenario and profile (`replayedFrom` set), recreates the scenario's faults for it, and re-sends the recorded requests in order through the simulator. The original simulation is never modified. The response compares each request's original and replayed status.
+- Timing: on a `virtual` or `accelerated` clock, the clock is advanced to each request's original offset first, so scheduled work between requests runs as it did. On a `realtime` clock requests are re-sent back to back, and the response says that time-dependent behavior (delays, expiry, rate-limit windows) may differ.
+- Replays are bounded to one simulation; unrelated traffic and global state are not replayed. Values that are random by design, such as provider UUIDs, differ between runs.
+- The dashboard's **Simulations** view lists simulations with **Timeline** and **Replay** actions. A replay's timeline starts with a `ReplayStarted` event naming its origin.
+
 ## Scenarios
 
 A **scenario** names one provider behavior: the state path a resource follows and when, the webhooks that emits, and any faults that apply. Scenarios are declared next to each provider (`internal/providers/<provider>/scenarios.yaml`). They configure behavior around the provider's own routes and state model; they don't change the API contract. Pick one when creating a simulation:

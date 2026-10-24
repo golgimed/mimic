@@ -42,12 +42,14 @@ var ErrNotFound = errors.New("simulation not found")
 // X-Mimic-Simulation header; a request without one runs in a fresh
 // implicit simulation of its own.
 type Simulation struct {
-	ID        string `json:"id"`
-	Seed      int64  `json:"seed"`
-	Scenario  string `json:"scenario,omitempty"`
-	Profile   string `json:"profile,omitempty"`
-	Implicit  bool   `json:"implicit"`
-	CreatedAt string `json:"createdAt"`
+	ID       string `json:"id"`
+	Seed     int64  `json:"seed"`
+	Scenario string `json:"scenario,omitempty"`
+	Profile  string `json:"profile,omitempty"`
+	// ReplayedFrom is the simulation this one replays, if any.
+	ReplayedFrom string `json:"replayedFrom,omitempty"`
+	Implicit     bool   `json:"implicit"`
+	CreatedAt    string `json:"createdAt"`
 
 	mu    sync.Mutex
 	draws map[string]uint64
@@ -134,6 +136,8 @@ type Params struct {
 	Scenario string
 	Profile  string
 	Implicit bool
+	// ReplayedFrom marks a replay of another simulation.
+	ReplayedFrom string
 }
 
 // Create persists a new simulation.
@@ -153,16 +157,17 @@ func (st *Store) Create(ctx context.Context, p Params) (*Simulation, error) {
 		return nil, fmt.Errorf("seed must be between 1 and %d", int64(maxSeed))
 	}
 	s := &Simulation{
-		ID:        "sim_" + uuid.NewString(),
-		Seed:      seed,
-		Scenario:  scenario,
-		Profile:   profile,
-		Implicit:  implicit,
-		CreatedAt: clock.Now().Format(time.RFC3339Nano),
+		ID:           "sim_" + uuid.NewString(),
+		Seed:         seed,
+		Scenario:     scenario,
+		Profile:      profile,
+		ReplayedFrom: p.ReplayedFrom,
+		Implicit:     implicit,
+		CreatedAt:    clock.Now().Format(time.RFC3339Nano),
 	}
 	if _, err := st.db.ExecContext(context.WithoutCancel(ctx),
-		`INSERT INTO simulations (id, seed, scenario, profile, implicit, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		s.ID, s.Seed, s.Scenario, s.Profile, s.Implicit, s.CreatedAt,
+		`INSERT INTO simulations (id, seed, scenario, profile, replayed_from, implicit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		s.ID, s.Seed, s.Scenario, s.Profile, s.ReplayedFrom, s.Implicit, s.CreatedAt,
 	); err != nil {
 		return nil, err
 	}
@@ -185,8 +190,8 @@ func (st *Store) Get(ctx context.Context, id string) (*Simulation, error) {
 
 	var s Simulation
 	err := st.db.QueryRowContext(ctx,
-		`SELECT id, seed, scenario, profile, implicit, created_at FROM simulations WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Seed, &s.Scenario, &s.Profile, &s.Implicit, &s.CreatedAt)
+		`SELECT id, seed, scenario, profile, replayed_from, implicit, created_at FROM simulations WHERE id = ?`, id,
+	).Scan(&s.ID, &s.Seed, &s.Scenario, &s.Profile, &s.ReplayedFrom, &s.Implicit, &s.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -210,7 +215,7 @@ func (st *Store) List(ctx context.Context, includeImplicit bool, limit int) ([]*
 	if limit <= 0 {
 		limit = 100
 	}
-	query := `SELECT id, seed, scenario, profile, implicit, created_at FROM simulations`
+	query := `SELECT id, seed, scenario, profile, replayed_from, implicit, created_at FROM simulations`
 	if !includeImplicit {
 		query += ` WHERE implicit = 0`
 	}
@@ -223,7 +228,7 @@ func (st *Store) List(ctx context.Context, includeImplicit bool, limit int) ([]*
 	out := []*Simulation{}
 	for rows.Next() {
 		var s Simulation
-		if err := rows.Scan(&s.ID, &s.Seed, &s.Scenario, &s.Profile, &s.Implicit, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Seed, &s.Scenario, &s.Profile, &s.ReplayedFrom, &s.Implicit, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, &s)

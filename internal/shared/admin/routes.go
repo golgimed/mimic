@@ -49,6 +49,9 @@ func RegisterRoutes(mux *http.ServeMux, db *sql.DB, store *Store, reg *registry.
 	mux.HandleFunc("GET /admin/simulations", func(w http.ResponseWriter, r *http.Request) {
 		handleListSimulations(w, r, db)
 	})
+	mux.HandleFunc("POST /admin/simulations/{id}/replay", func(w http.ResponseWriter, r *http.Request) {
+		handleReplaySimulation(w, r, db, store, mux)
+	})
 	mux.HandleFunc("GET /admin/simulations/{id}", func(w http.ResponseWriter, r *http.Request) {
 		handleGetSimulation(w, r, db)
 	})

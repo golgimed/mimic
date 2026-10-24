@@ -1,9 +1,12 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,8 +67,14 @@ func withTimeline(rec *timeline.Recorder, sims *sim.Store, next http.Handler) ht
 			Provider: provider,
 			Data:     map[string]any{"method": r.Method, "path": r.URL.Path},
 		})
+		seq := recordForReplay(sims, simulation, r)
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
+		if seq > 0 {
+			if err := sims.RecordStatus(ctx, simulation.ID, seq, sw.status); err != nil {
+				slog.Warn("replay: record response status", "error", err)
+			}
+		}
 		timeline.Record(ctx, timeline.Event{
 			Type:     timeline.ResponseReturned,
 			Provider: provider,
@@ -77,6 +86,33 @@ func withTimeline(rec *timeline.Recorder, sims *sim.Store, next http.Handler) ht
 			},
 		})
 	})
+}
+
+// recordForReplay appends r to its simulation's replay log, restoring the
+// body for the handler. Returns the request's seq, or 0 if it couldn't be
+// recorded (replay then won't include it; the request itself proceeds).
+func recordForReplay(sims *sim.Store, simulation *sim.Simulation, r *http.Request) int {
+	var body []byte
+	if r.Body != nil {
+		head, err := io.ReadAll(io.LimitReader(r.Body, sim.MaxRecordedBody+1))
+		if err != nil {
+			slog.Warn("replay: read request body", "error", err)
+			return 0
+		}
+		r.Body = readCloser{io.MultiReader(bytes.NewReader(head), r.Body), r.Body}
+		body = head[:min(len(head), sim.MaxRecordedBody)]
+	}
+	seq, err := sims.RecordRequest(r.Context(), simulation, r, body)
+	if err != nil {
+		slog.Warn("replay: record request", "error", err)
+		return 0
+	}
+	return seq
+}
+
+type readCloser struct {
+	io.Reader
+	io.Closer
 }
 
 // statusWriter captures the response status code.

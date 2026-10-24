@@ -41,26 +41,10 @@ func handleCreateSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB, 
 		writeValidation(w, "profile", err.Error())
 		return
 	}
-	var sc *scenario.Scenario
-	var faultInputs []CreateFaultInput
 	if wire.Scenario != "" {
-		found, ok := scenario.Lookup(wire.Scenario)
-		if !ok {
+		if _, ok := scenario.Lookup(wire.Scenario); !ok {
 			writeValidation(w, "scenario", "unknown scenario; see GET /admin/scenarios")
 			return
-		}
-		sc = &found
-		for i, f := range sc.Faults {
-			input, issues := createFaultWire{
-				Provider: sc.Provider, RoutePattern: f.Route, FaultKind: f.Kind, FaultValue: f.Value,
-				Times: f.Times, Probability: f.Probability,
-			}.toInput()
-			if len(issues) > 0 {
-				writeError(w, http.StatusInternalServerError, "INVALID_SCENARIO",
-					fmt.Sprintf("scenario %q fault #%d: %s: %s", sc.Name, i+1, issues[0].Path, issues[0].Message))
-				return
-			}
-			faultInputs = append(faultInputs, input)
 		}
 	}
 
@@ -69,12 +53,9 @@ func handleCreateSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB, 
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	for _, input := range faultInputs {
-		input.SimulationID = s.ID
-		if _, err := faults.CreateFault(input); err != nil {
-			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
-			return
-		}
+	if err := createScenarioFaults(faults, s); err != nil {
+		writeError(w, http.StatusInternalServerError, "INVALID_SCENARIO", err.Error())
+		return
 	}
 	writeJSON(w, http.StatusCreated, s)
 }
@@ -111,6 +92,31 @@ func handleGetSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+// createScenarioFaults creates the faults of s's scenario, scoped to s.
+func createScenarioFaults(faults *Store, s *sim.Simulation) error {
+	if s.Scenario == "" {
+		return nil
+	}
+	sc, ok := scenario.Lookup(s.Scenario)
+	if !ok {
+		return fmt.Errorf("unknown scenario %q", s.Scenario)
+	}
+	for i, f := range sc.Faults {
+		input, issues := createFaultWire{
+			Provider: sc.Provider, RoutePattern: f.Route, FaultKind: f.Kind, FaultValue: f.Value,
+			Times: f.Times, Probability: f.Probability,
+		}.toInput()
+		if len(issues) > 0 {
+			return fmt.Errorf("scenario %q fault #%d: %s: %s", sc.Name, i+1, issues[0].Path, issues[0].Message)
+		}
+		input.SimulationID = s.ID
+		if _, err := faults.CreateFault(input); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // handleListScenarios serves GET /admin/scenarios: every scenario the

@@ -98,3 +98,22 @@ curl -X POST http://localhost:3000/sncr/api/v1/numeracoes/receita-especial-reten
 Standard Mimic fault injection applies via `PUT /admin/faults` (provider `sncr`, one of the four route paths
 above) — useful for exercising GolgiMed's retry/error handling for the numeracoes calls without a real ANVISA
 outage.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../../../docs/compatibility.md).
+
+**Contract**: High. Login, token exchange and both numeração endpoints follow the Manual da API SNCR and the integration instructions.
+**Behavior**: High. The documented business rules are enforced (see "Business rules enforced").
+
+- **Request validation:** Bearer token, plus a prescriber identity match (404).
+- **Request quotas:** `quantidade` ranges, daily and monthly quotas, CNPJ check digits, and a `.br` callback domain.
+- **Responses & errors:** documented status codes. The message wording is a placeholder (see "Known limitations").
+- **Lifecycle & async:** none. Allocation is synchronous.
+- **Lifecycle & async, quota periods:** daily and monthly quota periods follow the simulation clock, so a virtual clock can roll a quota over.
+- **Fault injection:** provider `sncr`, one of the four route paths.
+- **Known differences:**
+  - The Gov.br/Keycloak redirect chain is skipped, and `state` is echoed but not validated.
+  - The meaning of the number format's segments is assumed.
+  - Requests over the remaining balance get a 400 rather than a truncated result (assumption).
+- **Unsupported:** anything beyond numbering allocation. The real API has no document submission.

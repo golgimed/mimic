@@ -46,3 +46,32 @@ Delay between status transitions is controlled by `ZENVIA_STATUS_DELAY_MS` (defa
 
 - The internal status transition (`ACCEPTED → SENT → DELIVERED`) is the same for every channel; the real API's exact codes vary slightly by channel (e.g. WhatsApp also has `READ`).
 - Webhook signing/verification (e.g. an HMAC header) is not implemented.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../../../docs/compatibility.md).
+
+**Contract**: High. The send-message endpoints for SMS, WhatsApp and Email and the subscription CRUD follow the Zenvia v2 OpenAPI (`docs/vendor/zenvia-openapi-v2.json`).
+**Behavior**: Simplified. Every channel follows the same status path, and there is no real carrier.
+
+- **Supported:** `POST /channels/{sms,whatsapp,email}/messages` and `/subscriptions` (create, list, get, delete).
+- **Request validation:** `X-API-TOKEN` presence only, plus the required `from`, `to` and `contents` for each channel. A failure returns Mimic's `VALIDATION_ERROR` body.
+- **Lifecycle & async:**
+  - Messages start in Mimic's internal `ACCEPTED` state and move `SENT → DELIVERED`, one hop every `ZENVIA_STATUS_DELAY_MS`, via the job scheduler.
+  - Scenarios select other documented paths: `REJECTED`, `NOT_DELIVERED`, `READ`.
+- **Webhooks:**
+  - `MESSAGE_STATUS` events go to matching subscriptions, filtered by channel and direction.
+  - `description` and `causes` are included only when a scenario provides them.
+  - Payloads are not signed.
+- **Fault injection:** provider `zenvia`.
+  - Route paths above for request faults.
+  - Route `webhook` for `webhook_dropped` and `webhook_invalid`.
+- **Known differences:**
+  - Real status codes and timing vary by channel and carrier. Mimic uses one configurable delay.
+  - Real `READ` depends on the channel. In Mimic it appears only in the `message-read` scenario.
+  - Message and event ids are random UUIDs.
+- **Unsupported:**
+  - Content types other than `text`, `template`, `file` and `email`.
+  - Inbound messages (`MESSAGE` events).
+  - Webhook signing.
+  - Other Zenvia products (e.g. voice, RCS).

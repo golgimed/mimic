@@ -108,3 +108,18 @@ so they're covered by the existing flush/reset behavior.
 
 This directory is version-controlled — commit specs here so environments
 serve the same contract.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../docs/compatibility.md).
+
+**Contract**: As faithful as the spec. Paths, methods and response examples or schemas come from the spec, and local `$ref`s are resolved. Request validation is optional (`MIMIC_OPENAPI_VALIDATION`).
+**Behavior**: Generic. Spec routes return either static example or schema bodies or single-level CRUD persistence. There is no provider-specific logic.
+
+- **Lifecycle & async, webhooks:** none. Specs don't describe behavior.
+- **Fault injection:** provider `openapi`, the route path as mounted (with prefix), or `x-mimic-behavior`.
+- **Unsupported:**
+  - Security schemes (auth isn't enforced).
+  - Callbacks and webhooks declared in specs.
+  - Nested CRUD resources.
+  - External `$ref`s.

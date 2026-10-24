@@ -74,3 +74,19 @@ Fault injection: provider `crm`, route `/crm/WebServiceConsultaMedicos/ServicoCo
 - The manual gives no HTTP status for SOAP 1.2 rejection or malformed requests: Mimic uses 415 / 400.
 - The real service accepts TLS 1.2 only; Mimic serves plain HTTP.
 - The TOTAL.ZIP batch file (separate spec) is not simulated.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../../../docs/compatibility.md).
+
+**Contract**: High. SOAP 1.1 `Consultar` and `Validar` follow manual v3.0, and the official WSDL is served verbatim.
+**Behavior**: Fixture-based. Lookups answer from built-in fixtures plus `MIMIC_CRM_DOCTORS`.
+
+- **Request validation:**
+  - SOAP 1.1 envelope and namespace.
+  - Access key (`MIMIC_CRM_ACCESS_KEY`).
+- **Lifecycle & async:** none.
+- **Webhooks:** none.
+- **Fault injection:** provider `crm`, route `/crm/WebServiceConsultaMedicos/ServicoConsultaMedicos`.
+- **Known differences:** see "Known gaps / assumptions" above: fixed `dataAtualizacao`, HTTP 415/400 for SOAP 1.2 or malformed requests, plain HTTP instead of TLS 1.2.
+- **Unsupported:** the TOTAL.ZIP batch file and other CFM services.

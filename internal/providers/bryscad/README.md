@@ -35,3 +35,22 @@ local integration testing.
 ## Fault injection
 
 Use `PUT /admin/faults` with provider `bry-scad` and any implemented route path.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../../../docs/compatibility.md).
+
+**Contract**: High. All 54 operations of BRy SCAD OpenAPI v2.12.1 are registered, using the documented response envelopes.
+**Behavior**: Partial. The collection lifecycle is simulated; other operations return deterministic stubs.
+
+- **Request validation:** `Authorization: Bearer` presence only. Collection creation requires a non-empty body.
+- **Lifecycle & async:**
+  - Collections move from `PENDENTE` to one of `CONCLUIDO`, `CANCELADO` or `REJEITADA`. These are guarded transitions; a collection that has already left `PENDENTE` gets a 409, which is a Mimic assumption.
+  - Completion happens through the Mimic-only `/concluir`, or automatically under a scenario (`collection-completed`, `collection-rejected`, `collection-cancelled`).
+- **Webhooks:** the completion webhook goes to `BRY_SCAD_WEBHOOK_URL` and carries only the collection key, as golgimed's adapter expects. It is not signed.
+- **Fault injection:** provider `bry-scad`, any implemented route path.
+- **Known differences:**
+  - Real collections complete when people sign; Mimic completes them by helper call or scenario.
+  - Signed documents and history are fabricated at completion.
+  - Collection keys are random UUIDs.
+- **Unsupported:** real signing sessions, signature validation, and per-participant progression.

@@ -106,31 +106,12 @@ func toIssues(err error, base validationIssue) []validationIssue {
 
 	var reqErr *openapi3filter.RequestError
 	if errors.As(err, &reqErr) {
-		switch {
-		case reqErr.Parameter != nil:
-			base.In, base.Name = reqErr.Parameter.In, reqErr.Parameter.Name
-		case reqErr.RequestBody != nil:
-			base.In = "body"
-		}
-		if reqErr.Err != nil {
-			return toIssues(reqErr.Err, withReason(base, reqErr.Reason))
-		}
-		return []validationIssue{withReason(base, reqErr.Reason)}
+		return requestErrorIssues(reqErr, base)
 	}
 
 	var schemaErr *openapi3.SchemaError
 	if errors.As(err, &schemaErr) {
-		// Parameter schema errors always arrive wrapped in a RequestError
-		// naming the parameter; a bare SchemaError (kin-openapi's
-		// MultiError mode returns body errors unwrapped) is the body's.
-		if base.In == "" {
-			base.In = "body"
-		}
-		if ptr := schemaErr.JSONPointer(); len(ptr) > 0 && base.In == "body" {
-			base.Name = strings.Join(ptr, ".")
-		}
-		base.Reason = schemaErr.Reason
-		return []validationIssue{base}
+		return []validationIssue{schemaErrorIssue(schemaErr, base)}
 	}
 
 	var parseErr *openapi3filter.ParseError
@@ -143,6 +124,36 @@ func toIssues(err error, base validationIssue) []validationIssue {
 		base.Reason = err.Error()
 	}
 	return []validationIssue{base}
+}
+
+// requestErrorIssues names the parameter or body a RequestError is about,
+// then flattens its cause.
+func requestErrorIssues(reqErr *openapi3filter.RequestError, base validationIssue) []validationIssue {
+	switch {
+	case reqErr.Parameter != nil:
+		base.In, base.Name = reqErr.Parameter.In, reqErr.Parameter.Name
+	case reqErr.RequestBody != nil:
+		base.In = "body"
+	}
+	if reqErr.Err != nil {
+		return toIssues(reqErr.Err, withReason(base, reqErr.Reason))
+	}
+	return []validationIssue{withReason(base, reqErr.Reason)}
+}
+
+// schemaErrorIssue turns a schema violation into an issue. Parameter
+// schema errors always arrive wrapped in a RequestError naming the
+// parameter; a bare SchemaError (kin-openapi's MultiError mode returns body
+// errors unwrapped) is the body's, named by its JSON pointer.
+func schemaErrorIssue(schemaErr *openapi3.SchemaError, base validationIssue) validationIssue {
+	if base.In == "" {
+		base.In = "body"
+	}
+	if ptr := schemaErr.JSONPointer(); len(ptr) > 0 && base.In == "body" {
+		base.Name = strings.Join(ptr, ".")
+	}
+	base.Reason = schemaErr.Reason
+	return base
 }
 
 func withReason(i validationIssue, reason string) validationIssue {

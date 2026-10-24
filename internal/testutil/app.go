@@ -23,6 +23,7 @@ import (
 	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/faults"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/storage"
 )
 
@@ -62,6 +63,7 @@ func New(t *testing.T, zenviaStatusDelay time.Duration) *App {
 	faultStore := admin.NewStore(db)
 	realtime, _ := clock.New(clock.Realtime, 1)
 	clock.Set(realtime)
+	_ = sim.SetDefaultProfile("")
 	sched := scheduler.New(db)
 	clock.SetRunner(sched.RunUntil)
 	// bry-scad completion webhook is unused by in-process Go tests today — the

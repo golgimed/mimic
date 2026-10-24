@@ -107,6 +107,9 @@ type Config struct {
 	// simulated-seconds-per-real-second (default 60).
 	Clock      string
 	ClockSpeed float64
+	// Profile is MIMIC_PROFILE: the default simulation profile (fast |
+	// realistic | chaos), "" for none.
+	Profile string
 	// BryScadWebhookURL is where the bry-scad provider's Mimic-only /concluir
 	// test helper calls back after simulating collection completion, mirroring
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
@@ -172,6 +175,7 @@ func Load() (Config, error) {
 		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
 		OpenAPIPersist:    openAPIPersist,
 		OpenAPIValidation: openAPIValidation,
+		Profile:           strings.ToLower(strings.TrimSpace(getEnv("MIMIC_PROFILE", ""))),
 		Clock:             clockMode,
 		ClockSpeed:        clockSpeed,
 		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),

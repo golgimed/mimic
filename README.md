@@ -229,6 +229,27 @@ curl -X POST http://localhost:3000/admin/simulations -d '{"scenario": "message-n
 - A scenario's `faults` are created scoped to that simulation, so they hit only its requests and other traffic is unaffected. They show up in `GET /admin/faults` with a `simulationId`.
 - Without a scenario, providers behave exactly as before.
 
+## Profiles
+
+A **profile** is a preset for *how* a simulation runs: timing, latency and failure rate. Providers and scenarios still decide *what* happens. List them with `GET /admin/profiles`, set a default with `MIMIC_PROFILE`, or pick one per simulation:
+
+```bash
+curl -X POST http://localhost:3000/admin/simulations -d '{"scenario":"message-delivered","profile":"fast","seed":1}'
+```
+
+| Profile | Transition delays | Added request latency | Failures |
+|---|---|---|---|
+| `fast` | ×0 (due immediately) | none | none |
+| `realistic` | ×1 | normal, mean 150ms, sd 50ms | none |
+| `chaos` | ×2 | uniform 50–1500ms | 10% of requests → `503` |
+
+Precedence, highest first:
+
+1. An explicit fault matching a request, from `PUT /admin/faults` or the scenario's faults, replaces the profile's latency and failure roll for that request.
+2. A scenario step's `after`, or the provider's configured default delay such as `ZENVIA_STATUS_DELAY_MS`, sets the base transition delay. The profile scales that base.
+
+Profile decisions draw from the simulation seed, so they are reproducible. The effective profile is stored on the simulation (`GET /admin/simulations/{id}`). Profile-caused failures appear on the timeline as `FaultApplied` with `"source": "profile:chaos"`. Without a profile, behavior is unchanged.
+
 ## Simulation time
 
 Everything time-based in a simulation — scheduled jobs and state-transition delays (e.g. `ZENVIA_STATUS_DELAY_MS`), token expiry, rate-limit windows, provider timestamps, timeline timestamps and simulated latency — reads a simulation clock instead of the system clock:
@@ -266,6 +287,7 @@ Kinds: `delay_ms`, `http_status`, `timeout`, `invalid_payload`, `webhook_dropped
 | `SCHEDULER_INTERVAL_MS` | `1000` | Background job poll interval |
 | `MIMIC_PROVIDERS` | *(all registered)* | Comma-separated list of provider names to enable, e.g. `zenvia,integraicp` |
 | `MIMIC_OPENAPI_PERSIST` | `false` | Enable real CRUD persistence for spec-mocked routes (see [specs/README.md](specs/README.md)) |
+| `MIMIC_PROFILE` | _(none)_ | Default simulation profile: `fast`, `realistic` or `chaos` (see [Profiles](#profiles)) |
 | `MIMIC_CLOCK` | `realtime` | Simulation time: `realtime`, `accelerated` or `virtual` (see [Simulation time](#simulation-time)) |
 | `MIMIC_CLOCK_SPEED` | `60` | Simulated seconds per real second when `MIMIC_CLOCK=accelerated` |
 | `MIMIC_OPENAPI_VALIDATION` | `permissive` | `strict` rejects requests that violate a spec's contract with 400; `permissive` serves them with an `X-Mimic-Validation-Warning` header (see [specs/README.md](specs/README.md)) |

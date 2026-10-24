@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/correlation"
 	"github.com/golgimed/mimic/internal/shared/sim"
 )
@@ -82,7 +83,7 @@ func Record(ctx context.Context, ev Event) {
 		}
 	}
 	if ev.Time == "" {
-		ev.Time = time.Now().UTC().Format(time.RFC3339Nano)
+		ev.Time = clock.Now().Format(time.RFC3339Nano)
 	}
 	var data any
 	if len(ev.Data) > 0 {

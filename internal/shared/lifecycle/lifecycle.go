@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
@@ -144,7 +145,7 @@ func (r *Runner) Schedule(ctx context.Context, t Transition) error {
 	if !r.Machine.Can(t.From, t.To) {
 		return fmt.Errorf("%w: %s %s %s -> %s", ErrInvalidTransition, r.Machine.Resource, t.ID, t.From, t.To)
 	}
-	return r.sched.ScheduleJob(ctx, r.jobKind, t, time.Now().Add(t.After))
+	return r.sched.ScheduleJob(ctx, r.jobKind, t, clock.Now().Add(t.After))
 }
 
 // handleJob runs a scheduled transition. A resource that has since been

@@ -2,7 +2,8 @@ package sncr
 
 import (
 	"fmt"
-	"time"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 // formatPrescriptionNumber renders one server-assigned prescription number
@@ -16,7 +17,7 @@ import (
 // decodes it). code/uf are folded in deterministically only so the format
 // looks plausible and differs sensibly across receita/tipo and UF.
 func formatPrescriptionNumber(code, uf string, seq int64) string {
-	yearMonth := time.Now().UTC().Format("0601")
+	yearMonth := clock.Now().Format("0601")
 	return fmt.Sprintf("%s.%d-%02d.%07d", yearMonth, codeDigit(code), ufCode(uf), seq)
 }
 

@@ -4,6 +4,8 @@ package faults
 import (
 	"context"
 	"time"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 // defaultDelay is the fallback latency (DEFAULT_DELAY_MS) applied when a
@@ -16,8 +18,10 @@ func SetDefaultDelay(d time.Duration) {
 	defaultDelay = d
 }
 
-// SimulateLatency sleeps for d if positive, otherwise falls back to the
-// configured default delay. Respects context cancellation.
+// SimulateLatency sleeps for d of simulation time if positive (see
+// clock.Sleep: scaled when accelerated, skipped when virtual), otherwise
+// falls back to the configured default delay. Respects context
+// cancellation.
 func SimulateLatency(ctx context.Context, d *time.Duration) {
 	delay := defaultDelay
 	if d != nil {
@@ -26,10 +30,5 @@ func SimulateLatency(ctx context.Context, d *time.Duration) {
 	if delay <= 0 {
 		return
 	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-	}
+	clock.Sleep(ctx, delay)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/golgimed/mimic/internal/providers"
 	"github.com/golgimed/mimic/internal/registry"
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/faults"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/storage"
@@ -165,7 +166,15 @@ func run(oa openAPIFlags) {
 
 	reg := registry.New()
 	faultStore := admin.NewStore(db)
+	simClock, err := clock.New(clock.Mode(cfg.Clock), cfg.ClockSpeed)
+	if err != nil {
+		log.Error("invalid clock configuration", "error", err)
+		os.Exit(1)
+	}
+	clock.Set(simClock)
+
 	sched := scheduler.New(db)
+	clock.SetRunner(sched.RunUntil)
 	providers.RegisterAll(reg, db, faultStore, sched, cfg.ZenviaStatusDelay, cfg.BryScadWebhookURL, cfg.CRMAccessKey, cfg.CRMDoctors)
 
 	specDir := discoverSpecDir(oa)

@@ -102,6 +102,11 @@ type Config struct {
 	// OpenAPIValidation is MIMIC_OPENAPI_VALIDATION: "permissive" (default)
 	// or "strict". Specs can override it via x-mimic-validation.
 	OpenAPIValidation string
+	// Clock is MIMIC_CLOCK (realtime | accelerated | virtual; default
+	// realtime) and ClockSpeed MIMIC_CLOCK_SPEED, the accelerated clock's
+	// simulated-seconds-per-real-second (default 60).
+	Clock      string
+	ClockSpeed float64
 	// BryScadWebhookURL is where the bry-scad provider's Mimic-only /concluir
 	// test helper calls back after simulating collection completion, mirroring
 	// the real BRy SCAD provider's webhook (golgimed's actual webhook route:
@@ -149,6 +154,15 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("MIMIC_OPENAPI_VALIDATION must be permissive or strict, got %q", openAPIValidation)
 	}
 
+	clockMode := strings.ToLower(getEnv("MIMIC_CLOCK", "realtime"))
+	if clockMode != "realtime" && clockMode != "accelerated" && clockMode != "virtual" {
+		return Config{}, fmt.Errorf("MIMIC_CLOCK must be realtime, accelerated or virtual, got %q", clockMode)
+	}
+	clockSpeed, err := strconv.ParseFloat(getEnv("MIMIC_CLOCK_SPEED", "60"), 64)
+	if err != nil || clockSpeed <= 0 {
+		return Config{}, fmt.Errorf("MIMIC_CLOCK_SPEED must be a positive number, got %q", getEnv("MIMIC_CLOCK_SPEED", "60"))
+	}
+
 	return Config{
 		Port:              port,
 		LogLevel:          logLevel,
@@ -158,6 +172,8 @@ func Load() (Config, error) {
 		ZenviaStatusDelay: time.Duration(zenviaStatusDelayMS) * time.Millisecond,
 		OpenAPIPersist:    openAPIPersist,
 		OpenAPIValidation: openAPIValidation,
+		Clock:             clockMode,
+		ClockSpeed:        clockSpeed,
 		EnabledProviders:  getEnvList("MIMIC_PROVIDERS"),
 		CRMDoctors:        getEnvList("MIMIC_CRM_DOCTORS"),
 		CRMAccessKey:      getEnv("MIMIC_CRM_ACCESS_KEY", "mimiccrm"),

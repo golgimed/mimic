@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 // sessionTTL matches the real API's 30s one-time session_token lifetime.
@@ -28,7 +30,7 @@ func NewStore(db *sql.DB) *Store {
 }
 
 func nowUTC() time.Time {
-	return time.Now().UTC()
+	return clock.Now()
 }
 
 // CreateAuthSession mints a one-time session_token bound to identity, plus

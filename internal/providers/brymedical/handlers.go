@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/httpx"
 )
 
@@ -35,7 +36,7 @@ func writeHubError(w http.ResponseWriter, status int, message, chave string) {
 		"status":    status,
 		"message":   message,
 		"chave":     chave,
-		"timestamp": time.Now().UnixMilli(),
+		"timestamp": clock.Now().UnixMilli(),
 		"traceId":   uuid.NewString(),
 	})
 }

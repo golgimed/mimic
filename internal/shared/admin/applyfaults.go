@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golgimed/mimic/internal/shared/behavior"
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/faults"
 	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/timeline"
@@ -76,7 +77,7 @@ func applyDelayFault(fault *FaultConfig, next http.Handler, w http.ResponseWrite
 
 func applyRateLimitFault(store *Store, provider, routePattern string, fault *FaultConfig, next http.Handler, w http.ResponseWriter, r *http.Request) {
 	limit, window, ok := parseRateLimitValue(fault.FaultValue)
-	if !ok || faults.CheckRateLimit(&store.rateLimiters, provider+"|"+routePattern, limit, window, time.Now()) {
+	if !ok || faults.CheckRateLimit(&store.rateLimiters, provider+"|"+routePattern, limit, window, clock.Now()) {
 		next.ServeHTTP(w, r)
 		return
 	}

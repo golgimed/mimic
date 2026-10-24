@@ -114,3 +114,20 @@ func TestLoadDotEnvDoesNotOverrideExistingEnv(t *testing.T) {
 		t.Errorf("Port = %d, want 1234 (existing env should win over .env)", cfg.Port)
 	}
 }
+
+func TestLoadClock(t *testing.T) {
+	t.Setenv("MIMIC_CLOCK", "Virtual")
+	cfg, err := Load()
+	if err != nil || cfg.Clock != "virtual" || cfg.ClockSpeed != 60 {
+		t.Fatalf("cfg = %+v, err %v; want virtual, speed 60", cfg, err)
+	}
+	t.Setenv("MIMIC_CLOCK_SPEED", "0")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for MIMIC_CLOCK_SPEED=0")
+	}
+	t.Setenv("MIMIC_CLOCK_SPEED", "10")
+	t.Setenv("MIMIC_CLOCK", "warp")
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for MIMIC_CLOCK=warp")
+	}
+}

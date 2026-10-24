@@ -8,11 +8,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/correlation"
 	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/timeline"
@@ -45,7 +47,7 @@ func (s *Scheduler) ScheduleJob(ctx context.Context, kind string, payload any, r
 	if err != nil {
 		return fmt.Errorf("marshal job payload: %w", err)
 	}
-	runAtStr := runAt.UTC().Format(time.RFC3339Nano)
+	runAtStr := runAt.UTC().Format(timeLayout)
 	res, err := s.db.ExecContext(context.WithoutCancel(ctx),
 		"INSERT INTO jobs (kind, payload_json, run_at, status, request_id, simulation_id) VALUES (?, ?, ?, 'pending', ?, ?)",
 		kind, string(payloadJSON), runAtStr, correlation.RequestID(ctx), simulationID(ctx),
@@ -93,8 +95,12 @@ func (s *Scheduler) Tick(ctx context.Context) error {
 	return nil
 }
 
+// timeLayout is fixed-width so run_at compares correctly as a string
+// (RFC3339Nano drops trailing zeros, which breaks lexical ordering).
+const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
+
 func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	now := clock.Now().Format(timeLayout)
 	rows, err := s.db.QueryContext(ctx,
 		"SELECT id, kind, payload_json, request_id, simulation_id FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at",
 		now,
@@ -114,6 +120,42 @@ func (s *Scheduler) fetchDueJobs(ctx context.Context) ([]due, error) {
 	}
 	return jobs, rows.Err()
 }
+
+// RunUntil runs, in run_at order, every pending job due at or before
+// target, calling step(runAt) before each so the simulation clock reads
+// the job's due time while it runs. Jobs scheduled by those jobs are
+// picked up too if they fall due before target. It is the clock.Runner
+// behind POST /admin/clock/advance.
+func (s *Scheduler) RunUntil(ctx context.Context, target time.Time, step func(time.Time)) error {
+	limit := target.UTC().Format(timeLayout)
+	for range maxRunUntilJobs {
+		var (
+			j     due
+			runAt string
+		)
+		err := s.db.QueryRowContext(ctx,
+			"SELECT id, kind, payload_json, request_id, simulation_id, run_at FROM jobs WHERE status = 'pending' AND run_at <= ? ORDER BY run_at, id LIMIT 1",
+			limit,
+		).Scan(&j.id, &j.kind, &j.payloadJSON, &j.requestID, &j.simID, &runAt)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("query next due job: %w", err)
+		}
+		if t, err := time.Parse(timeLayout, runAt); err == nil {
+			step(t)
+		} else if t, err := time.Parse(time.RFC3339Nano, runAt); err == nil {
+			step(t)
+		}
+		s.processJob(ctx, j)
+	}
+	return fmt.Errorf("more than %d jobs fell due while advancing the clock; possible scheduling loop", maxRunUntilJobs)
+}
+
+// maxRunUntilJobs bounds one RunUntil, guarding against a job that keeps
+// rescheduling itself with no delay.
+const maxRunUntilJobs = 10000
 
 // processJob marks j processing, dispatches it to its registered handler (if
 // any), and marks it done/failed. Errors are logged, not returned — one

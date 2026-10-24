@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/httpx"
 )
 
@@ -20,7 +21,7 @@ func sendError(w http.ResponseWriter, status, code int, message string) {
 }
 
 func nowISO() string {
-	return time.Now().UTC().Format(time.RFC3339Nano)
+	return clock.Now().Format(time.RFC3339Nano)
 }
 
 func authenticationsHandler(store *Store) http.HandlerFunc {
@@ -78,7 +79,7 @@ func authenticationsHandler(store *Store) http.HandlerFunc {
 		if query.ClearanceLifetime != nil {
 			lifetime = *query.ClearanceLifetime
 		}
-		expireTimestamp := time.Now().UTC().Add(time.Duration(lifetime) * time.Second).Format(time.RFC3339Nano)
+		expireTimestamp := clock.Now().Add(time.Duration(lifetime) * time.Second).Format(time.RFC3339Nano)
 
 		httpx.WriteJSON(w, http.StatusOK, map[string]any{
 			"data": map[string]any{

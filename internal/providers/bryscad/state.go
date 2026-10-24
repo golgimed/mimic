@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/golgimed/mimic/internal/shared/clock"
 )
 
 type Collection struct {
@@ -98,7 +99,7 @@ func (s *Store) CompleteCollection(chave string) (*Collection, error) {
 		return c, err
 	}
 
-	now := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	now := clock.Now().Format("2006-01-02T15:04:05Z")
 
 	participants, _ := c.Payload["participantes"].([]any)
 	historico := make([]map[string]any, 0, len(participants))

@@ -7,7 +7,7 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION}" -o /mimic ./cmd/mimic
 RUN mkdir -p /data
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35
+FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /mimic /mimic
 COPY --from=build --chown=nonroot:nonroot /data /data
 

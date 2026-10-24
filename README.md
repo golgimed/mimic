@@ -215,6 +215,20 @@ curl http://localhost:3000/zenvia/subscriptions -H "X-API-TOKEN: t" -H "X-Mimic-
 - A scheduled job runs in the simulation of the request that scheduled it.
 - Values that stay non-deterministic: provider-assigned UUIDs such as Zenvia message ids, BRy collection keys and webhook event ids, plus wall-clock timestamps. They identify resources rather than drive behavior.
 
+## Scenarios
+
+A **scenario** names one provider behavior: the state path a resource follows and when, the webhooks that emits, and any faults that apply. Scenarios are declared next to each provider (`internal/providers/<provider>/scenarios.yaml`). They configure behavior around the provider's own routes and state model; they don't change the API contract. Pick one when creating a simulation:
+
+```bash
+curl http://localhost:3000/admin/scenarios        # catalog: name, provider, lifecycle, webhooks, faults
+curl -X POST http://localhost:3000/admin/simulations -d '{"scenario": "message-not-delivered", "seed": 1}'
+# then send requests with X-Mimic-Simulation: <id>
+```
+
+- Resources created in that simulation follow the scenario's path instead of the provider's default. A transition without `after` uses the provider's default delay (e.g. `ZENVIA_STATUS_DELAY_MS`). Scheduled jobs keep following the scenario, because they run in the simulation.
+- A scenario's `faults` are created scoped to that simulation, so they hit only its requests and other traffic is unaffected. They show up in `GET /admin/faults` with a `simulationId`.
+- Without a scenario, providers behave exactly as before.
+
 ## Simulation time
 
 Everything time-based in a simulation — scheduled jobs and state-transition delays (e.g. `ZENVIA_STATUS_DELAY_MS`), token expiry, rate-limit windows, provider timestamps, timeline timestamps and simulated latency — reads a simulation clock instead of the system clock:

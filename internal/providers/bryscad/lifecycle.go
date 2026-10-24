@@ -2,10 +2,16 @@ package bryscad
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/golgimed/mimic/internal/shared/lifecycle"
+	"github.com/golgimed/mimic/internal/shared/scenario"
+	"github.com/golgimed/mimic/internal/shared/scheduler"
+	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
 // collectionLifecycle: a collection starts PENDENTE and ends in exactly one
@@ -15,7 +21,10 @@ var collectionLifecycle = lifecycle.NewMachine("coleta", map[string][]string{
 	"PENDENTE": {"CONCLUIDO", "CANCELADO", "REJEITADA"},
 })
 
-func newCollectionRunner(store *Store) *lifecycle.Runner {
+// newCollectionRunner builds the collection lifecycle runner. Scenario
+// transitions (scheduled by startScenario) deliver the completion webhook
+// themselves; the /concluir helper delivers it after responding.
+func newCollectionRunner(store *Store, sched *scheduler.Scheduler, db *sql.DB, webhookURL string) *lifecycle.Runner {
 	current := func(_ context.Context, chave string) (string, bool, error) {
 		c, err := store.GetCollection(chave)
 		if err != nil || c == nil {
@@ -32,7 +41,57 @@ func newCollectionRunner(store *Store) *lifecycle.Runner {
 		}
 		return err
 	}
-	return lifecycle.NewRunner(Name, collectionLifecycle, nil, current, apply)
+	runner := lifecycle.NewRunner(Name, collectionLifecycle, sched, current, apply)
+	runner.OnChanged = func(ctx context.Context, t lifecycle.Transition) error {
+		if t.Meta["source"] == "scenario" && t.To == "CONCLUIDO" {
+			deliverCompletionWebhook(ctx, db, webhookURL, t.ID)
+		}
+		return scheduleScenarioStep(ctx, runner, t.ID, t.To)
+	}
+	return runner
+}
+
+// startScenario starts a new collection down the simulation's scenario
+// path, if one applies to collections.
+func startScenario(ctx context.Context, runner *lifecycle.Runner, chave string) error {
+	return scheduleScenarioStep(ctx, runner, chave, "PENDENTE")
+}
+
+// scheduleScenarioStep schedules the scenario step leaving from, if any.
+// A step without "after" runs on the next scheduler tick.
+func scheduleScenarioStep(ctx context.Context, runner *lifecycle.Runner, chave, from string) error {
+	sc, ok := scenario.Active(ctx, Name, "coleta")
+	if !ok {
+		return nil
+	}
+	step, ok := sc.Next(from)
+	if !ok {
+		return nil
+	}
+	t := lifecycle.Transition{ID: chave, From: from, To: step.To, Meta: map[string]string{"source": "scenario"}}
+	if step.After != nil {
+		t.After = time.Duration(*step.After)
+	}
+	return runner.Schedule(ctx, t)
+}
+
+// deliverCompletionWebhook POSTs BRy's completion webhook to webhookURL
+// (no-op when unset). Matches golgimed's webhookPayload shape
+// (bry_adapter.go): only the collection key is read from the body,
+// everything else is re-verified.
+func deliverCompletionWebhook(ctx context.Context, db *sql.DB, webhookURL, chave string) {
+	if webhookURL == "" {
+		return
+	}
+	if err := webhooks.Deliver(context.WithoutCancel(ctx), db, webhooks.DeliverInput{
+		Provider:     Name,
+		ResourceType: "coleta",
+		ResourceID:   chave,
+		URL:          webhookURL,
+		Payload:      map[string]any{"payload": map[string]any{"chave": chave}},
+	}); err != nil {
+		slog.Error("bry-scad: deliver completion webhook", "chave", chave, "error", err)
+	}
 }
 
 // writeTransitionError maps a lifecycle error onto SCAD's error envelope.

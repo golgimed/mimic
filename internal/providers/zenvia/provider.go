@@ -2,16 +2,29 @@ package zenvia
 
 import (
 	"database/sql"
+	_ "embed"
 	"net/http"
 	"time"
 
 	"github.com/golgimed/mimic/internal/registry"
 	"github.com/golgimed/mimic/internal/shared/admin"
+	"github.com/golgimed/mimic/internal/shared/scenario"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
 	"github.com/golgimed/mimic/internal/shared/webhooks"
 )
 
+//go:embed scenarios.yaml
+var scenariosYAML []byte
+
+// Scenarios are zenvia's built-in scenarios (scenarios.yaml).
+var Scenarios = scenario.MustParse(Name, scenariosYAML, func(resource, from, to string) bool {
+	return resource == "message" && messageLifecycle.Can(from, to)
+})
+
 func New(db *sql.DB, faultStore *admin.Store, sched *scheduler.Scheduler, statusDelay time.Duration) *registry.Provider {
+	if err := scenario.Register(Scenarios...); err != nil {
+		panic(err)
+	}
 	store := NewStore(db)
 	scheduleAdvance := RegisterScheduler(sched, db, store, faultStore, statusDelay)
 

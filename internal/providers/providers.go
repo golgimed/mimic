@@ -28,7 +28,7 @@ func RegisterAll(reg *registry.Registry, db *sql.DB, faultStore *admin.Store, sc
 	reg.Register(zenvia.New(db, faultStore, sched, zenviaStatusDelay))
 	reg.Register(integraicp.New(db, faultStore))
 	reg.Register(sncr.New(db, faultStore))
-	reg.Register(bryscad.New(db, faultStore, bryScadWebhookURL))
+	reg.Register(bryscad.New(db, faultStore, sched, bryScadWebhookURL))
 	reg.Register(brymedical.New(db, faultStore))
 	reg.Register(crm.New(faultStore, crmAccessKey, crmDoctors))
 }

@@ -1,0 +1,21 @@
+# Built-in bry-scad scenarios. Select one per simulation:
+#   POST /admin/simulations {"scenario": "<name>"}
+# A collection created in the simulation then follows the path on its own;
+# no /concluir, /cancelar or /rejeitar call is needed.
+- name: collection-completed
+  resource: coleta
+  description: Every signer signs; the collection concludes and BRy's completion webhook fires.
+  initial: PENDENTE
+  transitions:
+    - to: CONCLUIDO
+      after: 30s
+  webhooks: [completion]
+  requires: [BRY_SCAD_WEBHOOK_URL (completion webhook target)]
+
+- name: collection-rejected
+  resource: coleta
+  description: A signer rejects the collection; it ends REJEITADA and no completion webhook fires.
+  initial: PENDENTE
+  transitions:
+    - to: REJEITADA
+      after: 30s

@@ -24,7 +24,7 @@ func resolveSimulation(r *http.Request, sims *sim.Store) (*sim.Simulation, error
 		}
 		return s, nil
 	}
-	return sims.Create(r.Context(), 0, true)
+	return sims.Create(r.Context(), 0, "", true)
 }
 
 // withTimeline sets up each simulated request's context and records the

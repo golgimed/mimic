@@ -19,3 +19,11 @@
   transitions:
     - to: REJEITADA
       after: 30s
+
+- name: collection-cancelled
+  resource: coleta
+  description: The collection is cancelled before anyone signs; it ends CANCELADO and no completion webhook fires.
+  initial: PENDENTE
+  transitions:
+    - to: CANCELADO
+      after: 30s

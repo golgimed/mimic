@@ -113,8 +113,12 @@ async function showSimulationTimeline(id) {
 
 async function showSimulations() {
   selectedKey = null;
-  const res = await fetch('/admin/simulations');
-  const { content } = await res.json();
+  const [simsRes, scenariosRes, profilesRes] = await Promise.all([
+    fetch('/admin/simulations'), fetch('/admin/scenarios'), fetch('/admin/profiles'),
+  ]);
+  const { content } = await simsRes.json();
+  const scenarios = (await scenariosRes.json()).content;
+  const profiles = (await profilesRes.json()).content;
   const rows = content.map(s => `
     <tr class="align-top border-t border-slate-100">
       <td class="pr-3 py-1.5 font-mono">${escapeHTML(s.id.slice(0, 12))}</td>
@@ -127,7 +131,17 @@ async function showSimulations() {
         <button class="sim-replay text-blue-600 hover:underline" data-id="${escapeHTML(s.id)}">Replay</button>
       </td>
     </tr>`).join('');
+  const scenarioOptions = scenarios.map(s =>
+    `<option value="${escapeHTML(s.name)}" title="${escapeHTML(s.description)}">${escapeHTML(s.provider)} · ${escapeHTML(s.name)}</option>`).join('');
+  const profileOptions = profiles.map(p =>
+    `<option value="${escapeHTML(p.name)}" title="${escapeHTML(p.description)}">${escapeHTML(p.name)}</option>`).join('');
   document.getElementById('detail').innerHTML = `
+    <form id="new-sim" class="flex flex-wrap items-end gap-2 mb-4 text-xs">
+      <label class="flex flex-col">Scenario<select name="scenario" class="border rounded px-1 py-0.5"><option value="">(provider default)</option>${scenarioOptions}</select></label>
+      <label class="flex flex-col">Profile<select name="profile" class="border rounded px-1 py-0.5"><option value="">(default)</option>${profileOptions}</select></label>
+      <label class="flex flex-col">Seed<input name="seed" type="number" min="1" placeholder="random" class="border rounded px-1 py-0.5 w-28"></label>
+      <button class="font-medium text-white bg-slate-700 hover:bg-slate-800 rounded-md px-3 py-1">New simulation</button>
+    </form>
     <h2 class="text-base font-semibold mb-1">Simulations (${content.length})</h2>
     <p class="text-xs text-slate-500 mb-3">Replay re-sends a simulation's recorded requests in a <em>new</em> simulation with the same seed, scenario and profile. The original is not modified.</p>
     ${content.length ? `<table class="w-full text-xs"><tr class="text-slate-500 text-left"><th>ID</th><th>Seed</th><th>Scenario</th><th>Profile</th><th></th><th></th></tr>${rows}</table>` : '<div class="text-slate-400 text-xs">No explicit simulations yet (POST /admin/simulations).</div>'}
@@ -153,6 +167,21 @@ async function replaySimulation(id) {
 }
 
 document.getElementById('show-simulations').addEventListener('click', showSimulations);
+
+document.getElementById('detail').addEventListener('submit', async e => {
+  if (e.target.id !== 'new-sim') return;
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const body = {};
+  if (f.get('scenario')) body.scenario = f.get('scenario');
+  if (f.get('profile')) body.profile = f.get('profile');
+  if (f.get('seed')) body.seed = Number(f.get('seed'));
+  const res = await fetch('/admin/simulations', { method: 'POST', body: JSON.stringify(body) });
+  if (!res.ok) { const r = await res.json(); alert(JSON.stringify(r.error)); return; }
+  const s = await res.json();
+  await showSimulations();
+  prompt('Simulation created. Send requests with this header:', 'X-Mimic-Simulation: ' + s.id);
+});
 
 // Clicking a request ID in any timeline shows everything that request
 // caused; simulation rows offer their timeline and a replay.

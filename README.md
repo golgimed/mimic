@@ -231,6 +231,8 @@ curl -X POST http://localhost:3000/admin/simulations/sim_…/replay
 
 ## Scenarios
 
+The built-in library, with how to use and extend it, is documented in [docs/scenarios.md](docs/scenarios.md).
+
 A **scenario** names one provider behavior: the state path a resource follows and when, the webhooks that emits, and any faults that apply. Scenarios are declared next to each provider (`internal/providers/<provider>/scenarios.yaml`). They configure behavior around the provider's own routes and state model; they don't change the API contract. Pick one when creating a simulation:
 
 ```bash

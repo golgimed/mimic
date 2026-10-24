@@ -29,3 +29,38 @@
   faults:
     - kind: http_status
       value: "503"
+
+- name: message-rejected
+  resource: message
+  description: The provider rejects the message before sending it (e.g. an invalid sender); a single REJECTED event with a cause.
+  initial: ACCEPTED
+  transitions:
+    - to: REJECTED
+      meta:
+        description: The message was rejected by the provider
+        reason: Invalid sender
+        details: Simulated by Mimic (scenario message-rejected)
+  webhooks: [MESSAGE_STATUS]
+
+- name: message-read
+  resource: message
+  description: A message is sent, delivered and then read by the recipient. READ depends on the channel (e.g. WhatsApp) in the real API.
+  initial: ACCEPTED
+  transitions:
+    - to: SENT
+    - to: DELIVERED
+    - to: READ
+  webhooks: [MESSAGE_STATUS]
+
+- name: webhook-delivery-failed
+  description: Messages progress normally, but every MESSAGE_STATUS webhook in the simulation is dropped (never sent); the drops are logged on the message's webhook log and the timeline.
+  faults:
+    - kind: webhook_dropped
+      route: webhook
+
+- name: request-rate-limited
+  description: Sending an SMS is rate limited to 2 requests per minute; further sends in that window get 429 with Retry-After.
+  faults:
+    - kind: rate_limited
+      value: 2/1m
+      route: /zenvia/channels/sms/messages

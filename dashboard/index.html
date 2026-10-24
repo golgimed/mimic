@@ -9,6 +9,9 @@
 <header class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-white">
   <h1 class="text-lg font-semibold">Mimic</h1>
   <div class="flex items-center gap-2">
+  <button id="show-simulations" class="text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md px-3 py-1.5 transition-colors">
+    Simulations
+  </button>
   <button id="show-timeline" class="text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md px-3 py-1.5 transition-colors">
     Timeline
   </button>
@@ -100,12 +103,66 @@ async function showTimeline(requestId) {
 
 document.getElementById('show-timeline').addEventListener('click', () => showTimeline());
 
-// Clicking a request ID in any timeline shows everything that request caused.
+async function showSimulationTimeline(id) {
+  const events = await fetchTimeline(`?simulation_id=${encodeURIComponent(id)}`);
+  document.getElementById('detail').innerHTML = `
+    <h2 class="text-base font-semibold mb-3">Simulation ${escapeHTML(id)} (${events.length} events)</h2>
+    ${renderTimeline(events)}
+  `;
+}
+
+async function showSimulations() {
+  selectedKey = null;
+  const res = await fetch('/admin/simulations');
+  const { content } = await res.json();
+  const rows = content.map(s => `
+    <tr class="align-top border-t border-slate-100">
+      <td class="pr-3 py-1.5 font-mono">${escapeHTML(s.id.slice(0, 12))}</td>
+      <td class="pr-3 py-1.5">${escapeHTML(s.seed)}</td>
+      <td class="pr-3 py-1.5">${escapeHTML(s.scenario || '—')}</td>
+      <td class="pr-3 py-1.5">${escapeHTML(s.profile || '—')}</td>
+      <td class="pr-3 py-1.5 text-slate-500">${s.replayedFrom ? 'replay of ' + escapeHTML(s.replayedFrom.slice(0, 12)) : ''}</td>
+      <td class="py-1.5 whitespace-nowrap">
+        <button class="sim-timeline text-blue-600 hover:underline mr-2" data-id="${escapeHTML(s.id)}">Timeline</button>
+        <button class="sim-replay text-blue-600 hover:underline" data-id="${escapeHTML(s.id)}">Replay</button>
+      </td>
+    </tr>`).join('');
+  document.getElementById('detail').innerHTML = `
+    <h2 class="text-base font-semibold mb-1">Simulations (${content.length})</h2>
+    <p class="text-xs text-slate-500 mb-3">Replay re-sends a simulation's recorded requests in a <em>new</em> simulation with the same seed, scenario and profile. The original is not modified.</p>
+    ${content.length ? `<table class="w-full text-xs"><tr class="text-slate-500 text-left"><th>ID</th><th>Seed</th><th>Scenario</th><th>Profile</th><th></th><th></th></tr>${rows}</table>` : '<div class="text-slate-400 text-xs">No explicit simulations yet (POST /admin/simulations).</div>'}
+  `;
+  loadItems();
+}
+
+async function replaySimulation(id) {
+  const res = await fetch(`/admin/simulations/${encodeURIComponent(id)}/replay`, { method: 'POST' });
+  const r = await res.json();
+  if (!res.ok) { alert(r.error ? r.error.message : 'Replay failed'); return; }
+  const rows = r.requests.map(q => `
+    <tr class="border-t border-slate-100 ${q.match ? '' : 'bg-amber-50'}">
+      <td class="pr-3 py-1">${q.seq}</td><td class="pr-3 py-1">${escapeHTML(q.method)} ${escapeHTML(q.path)}</td>
+      <td class="pr-3 py-1">${q.originalStatus}</td><td class="pr-3 py-1">${q.replayStatus}</td><td class="py-1">${q.match ? '✓' : '≠'}</td>
+    </tr>`).join('');
+  document.getElementById('detail').innerHTML = `
+    <h2 class="text-base font-semibold mb-1">Replay of ${escapeHTML(id)}</h2>
+    <p class="text-xs text-slate-500 mb-1">New simulation <a href="#" class="sim-link text-blue-600 hover:underline" data-id="${escapeHTML(r.simulation.id)}">${escapeHTML(r.simulation.id)}</a> · ${r.matched}/${r.total} statuses matched</p>
+    <p class="text-xs text-slate-500 mb-3">${escapeHTML(r.timing)}</p>
+    <table class="w-full text-xs"><tr class="text-slate-500 text-left"><th>#</th><th>Request</th><th>Original</th><th>Replay</th><th></th></tr>${rows}</table>
+  `;
+}
+
+document.getElementById('show-simulations').addEventListener('click', showSimulations);
+
+// Clicking a request ID in any timeline shows everything that request
+// caused; simulation rows offer their timeline and a replay.
 document.getElementById('detail').addEventListener('click', e => {
   const link = e.target.closest('a.req');
-  if (!link) return;
-  e.preventDefault();
-  showTimeline(link.dataset.req);
+  if (link) { e.preventDefault(); showTimeline(link.dataset.req); return; }
+  const simTimeline = e.target.closest('.sim-timeline, a.sim-link');
+  if (simTimeline) { e.preventDefault(); showSimulationTimeline(simTimeline.dataset.id); return; }
+  const replay = e.target.closest('.sim-replay');
+  if (replay) replaySimulation(replay.dataset.id);
 });
 
 async function selectItem(provider, id) {

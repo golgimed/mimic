@@ -37,6 +37,7 @@ const (
 	WebhookFailed    Type = "WebhookFailed"
 	WebhookDropped   Type = "WebhookDropped"
 	FaultApplied     Type = "FaultApplied"
+	ReplayStarted    Type = "ReplayStarted"
 )
 
 // Event is one timeline entry. Data holds type-specific details (HTTP

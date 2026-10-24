@@ -29,3 +29,25 @@ curl http://localhost:3000/integraicp/c/my-channel/icp/v3/signatures \
 ## State model
 
 Unlike Zenvia (which persists a `status` column and advances it asynchronously via the scheduler — `ACCEPTED → SENT → DELIVERED`), IntegraICP's `executionStatus.currentStatus` values (`PENDING_AUTHORIZATON`, `PENDING_SIGNATURES`, `COMPLETED_WITH_SUCCESS`, etc.) are computed directly in each handler and never persisted. This is intentional: per the official API reference, authentication, credential-fetch, and signing are synchronous request/response operations, not a polled or webhook-driven pipeline — there is no real "state" to track between calls. `integraicp_credentials` therefore has no `status` column by design. If a future IntegraICP endpoint is genuinely asynchronous per the official docs, add a `status` column and drive it the same way Zenvia does, rather than hardcoding another literal.
+
+## Compatibility
+
+Format: [docs/compatibility.md](../../../docs/compatibility.md).
+
+**Contract**: High. The v3 authentications, credentials and signatures endpoints follow the official API reference, including PKCE.
+**Behavior**: Simplified. Authentication completes automatically, and signatures are produced without a certificate authority.
+
+- **Supported:** the three-step flow above: authenticate (`autostart`), fetch credential, sign.
+- **Request validation:**
+  - PKCE `code_verifier` against `code_challenge`.
+  - `contentDigest` must be base64-encoded SHA-256.
+  - Credential existence.
+- **Responses & errors:** documented shapes. `executionStatus.currentStatus` is computed per call (see "State model").
+- **Lifecycle & async:** none. The real API is synchronous request/response, so Mimic is too.
+- **Webhooks:** none. The flow uses `callback_uri` redirects.
+- **Fault injection:** provider `integraicp`, one of the three route paths. The `integraicp-unavailable` scenario makes every call return 503.
+- **Known differences:**
+  - The human provider-selection and login step is skipped.
+  - The certificate is a self-generated fake, not ICP-Brasil-issued.
+  - The non-autostart clearances list always has one fake entry.
+- **Unsupported:** real certificate chains, revocation, and timestamping.

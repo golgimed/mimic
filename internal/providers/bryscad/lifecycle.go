@@ -103,7 +103,7 @@ func deliverCompletionWebhook(ctx context.Context, db *sql.DB, webhookURL, chave
 func writeTransitionError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, lifecycle.ErrNotFound):
-		writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+		writeCollectionNotFound(w)
 	case errors.Is(err, lifecycle.ErrInvalidTransition):
 		writeError(w, http.StatusConflict, "coleta_situacao_invalida", "A coleta não está pendente.")
 	default:

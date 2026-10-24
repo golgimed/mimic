@@ -68,6 +68,10 @@ func writeError(w http.ResponseWriter, status int, key, message string) {
 	httpx.WriteJSON(w, status, map[string]any{"sucesso": false, "chaveI18n": key, "mensagem": message})
 }
 
+func writeCollectionNotFound(w http.ResponseWriter) {
+	writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+}
+
 func collectionResponse(c *Collection) map[string]any {
 	title, _ := c.Payload["nomeColeta"].(string)
 	if title == "" {
@@ -161,7 +165,7 @@ func getCollectionHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+			writeCollectionNotFound(w)
 			return
 		}
 		httpx.WriteJSON(w, http.StatusOK, []map[string]any{collectionResponse(collection)})
@@ -192,7 +196,7 @@ func participantsListHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+			writeCollectionNotFound(w)
 			return
 		}
 		participants, _ := collection.Payload["participantes"].([]any)
@@ -214,7 +218,7 @@ func historyListHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+			writeCollectionNotFound(w)
 			return
 		}
 		historico, _ := collection.Payload["_historico"].([]any)
@@ -236,7 +240,7 @@ func signedDocumentsListHandler(store *Store) http.HandlerFunc {
 			return
 		}
 		if collection == nil {
-			writeError(w, http.StatusNotFound, "coleta_nao_encontrada", "Coleta não encontrada.")
+			writeCollectionNotFound(w)
 			return
 		}
 		assinados, _ := collection.Payload["_documentosAssinados"].([]any)

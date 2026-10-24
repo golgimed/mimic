@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"hash/fnv"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v7"
@@ -81,37 +80,49 @@ func generate(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) any {
 
 	switch s.Type {
 	case "object":
-		names := make([]string, 0, len(s.Properties))
-		for name := range s.Properties {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
-		out := make(map[string]any, len(s.Properties))
-		for _, name := range names {
-			out[name] = generate(s.Properties[name], f, onPath)
-		}
-		// Shared properties plus a oneOf/anyOf: add the first
-		// alternative's own properties.
-		if len(s.Variants) > 0 {
-			if extra, ok := generate(s.Variants[0], f, onPath).(map[string]any); ok {
-				for k, v := range extra {
-					if _, exists := out[k]; !exists {
-						out[k] = v
-					}
-				}
-			}
-		}
-		return out
+		return generateObject(s, f, onPath)
 	case "array":
-		if s.Items == nil {
-			return []any{}
+		return generateArray(s, f, onPath)
+	default:
+		return generateScalar(s, f)
+	}
+}
+
+// generateObject builds an object from s's properties (sorted, for a
+// stable faker call order), plus the first oneOf/anyOf alternative's own
+// properties when s has both.
+func generateObject(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) map[string]any {
+	out := make(map[string]any, len(s.Properties))
+	for _, name := range sortedKeys(s.Properties) {
+		out[name] = generate(s.Properties[name], f, onPath)
+	}
+	if len(s.Variants) == 0 {
+		return out
+	}
+	extra, _ := generate(s.Variants[0], f, onPath).(map[string]any)
+	for k, v := range extra {
+		if _, exists := out[k]; !exists {
+			out[k] = v
 		}
-		item := generate(s.Items, f, onPath)
-		if item == nil {
-			return []any{}
-		}
-		return []any{item}
+	}
+	return out
+}
+
+// generateArray builds a one-item array, or an empty one when the item
+// schema is missing or recursive.
+func generateArray(s *schema, f *gofakeit.Faker, onPath map[*schema]bool) []any {
+	if s.Items == nil {
+		return []any{}
+	}
+	item := generate(s.Items, f, onPath)
+	if item == nil {
+		return []any{}
+	}
+	return []any{item}
+}
+
+func generateScalar(s *schema, f *gofakeit.Faker) any {
+	switch s.Type {
 	case "string":
 		return fakeString(s.Format, f)
 	case "integer":

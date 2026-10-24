@@ -17,30 +17,9 @@ func fromKinDoc(k *openapi3.T) (doc, error) {
 		d.Title = k.Info.Title
 		d.Version = k.Info.Version
 	}
-	if _, err := decodeExtension(k.Extensions, "x-mimic-name", &d.MimicName); err != nil {
+	if err := readDocExtensions(k.Extensions, &d); err != nil {
 		return doc{}, err
 	}
-	var persist bool
-	ok, err := decodeExtension(k.Extensions, "x-mimic-persist", &persist)
-	if err != nil {
-		return doc{}, err
-	}
-	if ok {
-		d.MimicPersist = &persist
-	}
-	var validation string
-	ok, err = decodeExtension(k.Extensions, "x-mimic-validation", &validation)
-	if err != nil {
-		return doc{}, err
-	}
-	if ok {
-		mode, err := ParseValidationMode(validation)
-		if err != nil {
-			return doc{}, fmt.Errorf("x-mimic-validation: %w", err)
-		}
-		d.MimicValidation = &mode
-	}
-
 	if k.Paths == nil {
 		return d, nil
 	}
@@ -49,24 +28,60 @@ func fromKinDoc(k *openapi3.T) (doc, error) {
 		if item == nil {
 			continue
 		}
-		ops := map[string]operation{}
-		for method, kop := range item.Operations() {
-			op, err := fromKinOperation(kop, item.Parameters, schemas)
-			if err != nil {
-				return doc{}, fmt.Errorf("%s %s: %w", strings.ToUpper(method), path, err)
-			}
-			var pathParams []string
-			for _, p := range op.Parameters {
-				if p.In == openapi3.ParameterInPath {
-					pathParams = append(pathParams, p.Name)
-				}
-			}
-			op.validate = newRequestValidator(k, path, strings.ToUpper(method), item, kop, pathParams)
-			ops[strings.ToLower(method)] = op
+		ops, err := fromKinPathItem(k, path, item, schemas)
+		if err != nil {
+			return doc{}, err
 		}
 		d.Paths[path] = ops
 	}
 	return d, nil
+}
+
+// readDocExtensions reads the document-level x-mimic-* extensions into d.
+func readDocExtensions(ext map[string]any, d *doc) error {
+	if _, err := decodeExtension(ext, "x-mimic-name", &d.MimicName); err != nil {
+		return err
+	}
+	var persist bool
+	ok, err := decodeExtension(ext, "x-mimic-persist", &persist)
+	if err != nil {
+		return err
+	}
+	if ok {
+		d.MimicPersist = &persist
+	}
+	var validation string
+	ok, err = decodeExtension(ext, "x-mimic-validation", &validation)
+	if err != nil || !ok {
+		return err
+	}
+	mode, err := ParseValidationMode(validation)
+	if err != nil {
+		return fmt.Errorf("x-mimic-validation: %w", err)
+	}
+	d.MimicValidation = &mode
+	return nil
+}
+
+// fromKinPathItem translates every operation of one path, attaching each
+// operation's request validator.
+func fromKinPathItem(k *openapi3.T, path string, item *openapi3.PathItem, schemas *schemaTranslator) (map[string]operation, error) {
+	ops := map[string]operation{}
+	for method, kop := range item.Operations() {
+		op, err := fromKinOperation(kop, item.Parameters, schemas)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s: %w", strings.ToUpper(method), path, err)
+		}
+		var pathParams []string
+		for _, p := range op.Parameters {
+			if p.In == openapi3.ParameterInPath {
+				pathParams = append(pathParams, p.Name)
+			}
+		}
+		op.validate = newRequestValidator(k, path, strings.ToUpper(method), item, kop, pathParams)
+		ops[strings.ToLower(method)] = op
+	}
+	return ops, nil
 }
 
 func fromKinOperation(k *openapi3.Operation, pathParams openapi3.Parameters, schemas *schemaTranslator) (operation, error) {
@@ -81,28 +96,7 @@ func fromKinOperation(k *openapi3.Operation, pathParams openapi3.Parameters, sch
 		op.Behavior = &b
 	}
 
-	// Path-item-level parameters apply to every operation unless the
-	// operation redeclares the same name+location.
-	seen := map[string]bool{}
-	for _, list := range []openapi3.Parameters{k.Parameters, pathParams} {
-		for _, ref := range list {
-			if ref == nil || ref.Value == nil {
-				continue
-			}
-			p := ref.Value
-			key := p.In + ":" + p.Name
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			op.Parameters = append(op.Parameters, parameter{
-				Name:     p.Name,
-				In:       p.In,
-				Required: p.Required,
-				Schema:   schemas.translate(p.Schema),
-			})
-		}
-	}
+	op.Parameters = mergeParameters(k.Parameters, pathParams, schemas)
 
 	if k.RequestBody != nil && k.RequestBody.Value != nil {
 		op.RequestBody = &requestBody{
@@ -113,13 +107,38 @@ func fromKinOperation(k *openapi3.Operation, pathParams openapi3.Parameters, sch
 
 	if k.Responses != nil {
 		for code, ref := range k.Responses.Map() {
-			if ref == nil || ref.Value == nil {
-				continue
+			if ref != nil && ref.Value != nil {
+				op.Responses[code] = response{Content: fromKinContent(ref.Value.Content, schemas)}
 			}
-			op.Responses[code] = response{Content: fromKinContent(ref.Value.Content, schemas)}
 		}
 	}
 	return op, nil
+}
+
+// mergeParameters combines an operation's parameters with its path item's:
+// path-item-level parameters apply to every operation unless the operation
+// redeclares the same name+location.
+func mergeParameters(opParams, pathParams openapi3.Parameters, schemas *schemaTranslator) []parameter {
+	var out []parameter
+	seen := map[string]bool{}
+	for _, ref := range append(append(openapi3.Parameters{}, opParams...), pathParams...) {
+		if ref == nil || ref.Value == nil {
+			continue
+		}
+		p := ref.Value
+		key := p.In + ":" + p.Name
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, parameter{
+			Name:     p.Name,
+			In:       p.In,
+			Required: p.Required,
+			Schema:   schemas.translate(p.Schema),
+		})
+	}
+	return out
 }
 
 func fromKinContent(c openapi3.Content, schemas *schemaTranslator) map[string]mediaType {
@@ -165,38 +184,56 @@ func (t *schemaTranslator) translate(ref *openapi3.SchemaRef) *schema {
 	if s, ok := t.done[k]; ok {
 		return s
 	}
-	s := &schema{Format: k.Format, Example: k.Example, Enum: k.Enum}
+	s := &schema{Format: k.Format, Example: k.Example, Enum: k.Enum, Type: firstNonNullType(k.Type)}
 	t.done[k] = s
-	if k.Type != nil {
-		for _, typ := range k.Type.Slice() {
-			if typ != "null" {
-				s.Type = typ
-				break
-			}
-		}
-	}
-	if len(k.Properties) > 0 {
-		s.Properties = make(map[string]*schema, len(k.Properties))
-		for name, p := range k.Properties {
-			s.Properties[name] = t.translate(p)
-		}
-	}
+	s.Properties = t.translateProperties(k.Properties)
 	s.Items = t.translate(k.Items)
 
 	for _, ref := range k.AllOf {
 		mergeAllOf(s, t.translate(ref))
 	}
-	for _, list := range []openapi3.SchemaRefs{k.OneOf, k.AnyOf} {
-		for _, ref := range list {
-			if v := t.translate(ref); v != nil {
-				s.Variants = append(s.Variants, v)
-			}
-		}
-	}
+	s.Variants = append(s.Variants, t.translateAll(k.OneOf)...)
+	s.Variants = append(s.Variants, t.translateAll(k.AnyOf)...)
 	if s.Type == "" && len(s.Properties) > 0 {
 		s.Type = "object"
 	}
 	return s
+}
+
+// firstNonNullType picks the schema's type, ignoring OpenAPI 3.1's "null"
+// in a type list.
+func firstNonNullType(types *openapi3.Types) string {
+	if types == nil {
+		return ""
+	}
+	for _, typ := range types.Slice() {
+		if typ != "null" {
+			return typ
+		}
+	}
+	return ""
+}
+
+func (t *schemaTranslator) translateProperties(props openapi3.Schemas) map[string]*schema {
+	if len(props) == 0 {
+		return nil
+	}
+	out := make(map[string]*schema, len(props))
+	for name, p := range props {
+		out[name] = t.translate(p)
+	}
+	return out
+}
+
+// translateAll translates a list of alternatives, dropping empty ones.
+func (t *schemaTranslator) translateAll(refs openapi3.SchemaRefs) []*schema {
+	var out []*schema
+	for _, ref := range refs {
+		if v := t.translate(ref); v != nil {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 // mergeAllOf folds one allOf member into s. Fields s already declares win;

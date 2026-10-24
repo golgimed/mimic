@@ -16,6 +16,7 @@ import (
 
 	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/timeline"
 )
 
@@ -137,7 +138,8 @@ func (r *Runner) Apply(ctx context.Context, t Transition) error {
 	return nil
 }
 
-// Schedule enqueues t on the job scheduler to run after t.After.
+// Schedule enqueues t on the job scheduler to run after t.After, scaled by
+// the simulation profile's DelayScale.
 func (r *Runner) Schedule(ctx context.Context, t Transition) error {
 	if r.sched == nil {
 		return errors.New("lifecycle: runner has no scheduler")
@@ -145,7 +147,7 @@ func (r *Runner) Schedule(ctx context.Context, t Transition) error {
 	if !r.Machine.Can(t.From, t.To) {
 		return fmt.Errorf("%w: %s %s %s -> %s", ErrInvalidTransition, r.Machine.Resource, t.ID, t.From, t.To)
 	}
-	return r.sched.ScheduleJob(ctx, r.jobKind, t, clock.Now().Add(t.After))
+	return r.sched.ScheduleJob(ctx, r.jobKind, t, clock.Now().Add(sim.ScaleDelay(ctx, t.After)))
 }
 
 // handleJob runs a scheduled transition. A resource that has since been

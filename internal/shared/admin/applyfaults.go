@@ -35,7 +35,7 @@ func RequestFaultHook(store *Store, provider, routePattern string) func(http.Han
 func applyFault(store *Store, provider, routePattern string, next http.Handler, w http.ResponseWriter, r *http.Request) {
 	fault, err := store.ConsumeMatchingFault(r.Context(), provider, routePattern)
 	if err != nil || fault == nil {
-		next.ServeHTTP(w, r)
+		applyProfile(provider, routePattern, next, w, r)
 		return
 	}
 	data := map[string]any{"faultId": fault.ID, "kind": string(fault.FaultKind), "route": routePattern}
@@ -92,6 +92,30 @@ func applyRateLimitFault(store *Store, provider, routePattern string, fault *Fau
 	})
 }
 
+// applyProfile applies the simulation profile's baseline characteristics
+// to a request no explicit fault matched: its failure-rate roll, then its
+// added latency (see sim.Profile for precedence).
+func applyProfile(provider, routePattern string, next http.Handler, w http.ResponseWriter, r *http.Request) {
+	p, ok := sim.ActiveProfile(r.Context())
+	if !ok {
+		next.ServeHTTP(w, r)
+		return
+	}
+	key := provider + ":" + routePattern
+	if p.FailureRate > 0 && sim.Rand(r.Context(), "profile-failure:"+key).Float64() < p.FailureRate {
+		timeline.Record(r.Context(), timeline.Event{Type: timeline.FaultApplied, Provider: provider, Data: map[string]any{
+			"kind": string(FaultHTTPStatus), "value": strconv.Itoa(p.FailureStatus), "route": routePattern, "source": "profile:" + p.Name,
+		}})
+		writeSimulatedStatus(w, p.FailureStatus)
+		return
+	}
+	if p.Latency != nil {
+		d := p.Latency.Sample(sim.Rand(r.Context(), "profile-latency:"+key))
+		faults.SimulateLatency(r.Context(), &d)
+	}
+	next.ServeHTTP(w, r)
+}
+
 func applyHTTPStatusFault(fault *FaultConfig, w http.ResponseWriter) {
 	status := 500
 	if fault.FaultValue != nil {
@@ -99,6 +123,10 @@ func applyHTTPStatusFault(fault *FaultConfig, w http.ResponseWriter) {
 			status = v
 		}
 	}
+	writeSimulatedStatus(w, status)
+}
+
+func writeSimulatedStatus(w http.ResponseWriter, status int) {
 	w.Header().Set(headerContentType, contentTypeJSON)
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{

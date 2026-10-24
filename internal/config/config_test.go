@@ -131,3 +131,11 @@ func TestLoadClock(t *testing.T) {
 		t.Fatal("expected error for MIMIC_CLOCK=warp")
 	}
 }
+
+func TestLoadProfile(t *testing.T) {
+	t.Setenv("MIMIC_PROFILE", " Chaos ")
+	cfg, err := Load()
+	if err != nil || cfg.Profile != "chaos" {
+		t.Fatalf("Profile = %q, err %v; want chaos", cfg.Profile, err)
+	}
+}

@@ -27,6 +27,7 @@ import (
 	"github.com/golgimed/mimic/internal/shared/clock"
 	"github.com/golgimed/mimic/internal/shared/faults"
 	"github.com/golgimed/mimic/internal/shared/scheduler"
+	"github.com/golgimed/mimic/internal/shared/sim"
 	"github.com/golgimed/mimic/internal/shared/storage"
 )
 
@@ -172,6 +173,10 @@ func run(oa openAPIFlags) {
 		os.Exit(1)
 	}
 	clock.Set(simClock)
+	if err := sim.SetDefaultProfile(cfg.Profile); err != nil {
+		log.Error("invalid MIMIC_PROFILE", "error", err)
+		os.Exit(1)
+	}
 
 	sched := scheduler.New(db)
 	clock.SetRunner(sched.RunUntil)

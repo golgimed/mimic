@@ -16,11 +16,12 @@ import (
 type createSimulationWire struct {
 	Seed     *int64 `json:"seed"`
 	Scenario string `json:"scenario"`
+	Profile  string `json:"profile"`
 }
 
 // handleCreateSimulation serves POST /admin/simulations {"seed": n,
-// "scenario": name}. Both are optional; a seed is generated (and returned)
-// when omitted. A scenario's faults are created scoped to the new
+// "scenario": name, "profile": name}. All are optional; a seed is generated
+// (and returned) when omitted, and the profile defaults to MIMIC_PROFILE. A scenario's faults are created scoped to the new
 // simulation.
 func handleCreateSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB, faults *Store) {
 	var wire createSimulationWire
@@ -35,6 +36,10 @@ func handleCreateSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB, 
 			return
 		}
 		seed = *wire.Seed
+	}
+	if err := sim.ValidateProfile(wire.Profile); err != nil {
+		writeValidation(w, "profile", err.Error())
+		return
 	}
 	var sc *scenario.Scenario
 	var faultInputs []CreateFaultInput
@@ -59,7 +64,7 @@ func handleCreateSimulation(w http.ResponseWriter, r *http.Request, db *sql.DB, 
 		}
 	}
 
-	s, err := sim.StoreFor(db).Create(r.Context(), seed, wire.Scenario, false)
+	s, err := sim.StoreFor(db).Create(r.Context(), sim.Params{Seed: seed, Scenario: wire.Scenario, Profile: wire.Profile})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
@@ -119,6 +124,15 @@ func handleListScenarios(w http.ResponseWriter, _ *http.Request) {
 			"lifecycle": s.Lifecycle(), "transitions": s.Steps, "webhooks": s.Webhooks,
 			"faults": s.Faults, "requires": s.Requires,
 		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"content": out})
+}
+
+// handleListProfiles serves GET /admin/profiles: the built-in profiles.
+func handleListProfiles(w http.ResponseWriter, _ *http.Request) {
+	out := make([]sim.Profile, 0, len(sim.Profiles))
+	for _, name := range sim.ProfileNames() {
+		out = append(out, sim.Profiles[name])
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"content": out})
 }

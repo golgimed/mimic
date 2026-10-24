@@ -53,6 +53,7 @@ func RegisterRoutes(mux *http.ServeMux, db *sql.DB, store *Store, reg *registry.
 		handleGetSimulation(w, r, db)
 	})
 	mux.HandleFunc("GET /admin/scenarios", handleListScenarios)
+	mux.HandleFunc("GET /admin/profiles", handleListProfiles)
 	mux.HandleFunc("GET /admin/clock", handleGetClock)
 	mux.HandleFunc("POST /admin/clock/advance", handleAdvanceClock)
 	mux.HandleFunc("POST /admin/flush", func(w http.ResponseWriter, r *http.Request) {

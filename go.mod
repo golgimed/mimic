@@ -6,7 +6,7 @@ require (
 	github.com/brianvoe/gofakeit/v7 v7.18.0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/google/uuid v1.6.0
-	github.com/rluders/lane v1.0.0
+	github.com/rluders/lane v1.1.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )

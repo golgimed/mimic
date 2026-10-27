@@ -40,8 +40,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
-github.com/rluders/lane v1.0.0 h1:GBLm1x0HF7IQICX/hVcpoY2xKNEXxyLxl86alGtqfkA=
-github.com/rluders/lane v1.0.0/go.mod h1:1Q1SQ9hK2fy8sZiTrwc5iDFen3/yZMgQOeo33/hWZhY=
+github.com/rluders/lane v1.1.0 h1:CcBhNbNsj8utnwLsMkYKVm1lwW+BJlMg6svvun4B0x0=
+github.com/rluders/lane v1.1.0/go.mod h1:1Q1SQ9hK2fy8sZiTrwc5iDFen3/yZMgQOeo33/hWZhY=
 github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28=
